@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 const ANILIST_URL: &str = "https://graphql.anilist.co";

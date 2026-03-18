@@ -13,22 +13,22 @@ use ratatui::{
     Frame,
 };
 
-// ── PREMIER SLATE & INDIGO PALETTE ───────────────────────────────────────────
-// Technical Luxury: Deep slates, sharp indigo highlights, balanced contrast.
+// ── BOLD BLACK PALETTE ────────────────────────────────────────────────────────
+// Pure black base. Single neon accent. High contrast everything.
 
-pub const C_BG:       Color = Color::Rgb(2,   2,   5  );  // deep space black
-pub const C_BG2:      Color = Color::Rgb(10,  10,  18 );  // slate black
-pub const C_BG3:      Color = Color::Rgb(15,  15,  25 );  // soft highlight
-pub const C_PANEL:    Color = Color::Rgb(5,   5,   10 );  // panel bg
-pub const C_BORDER:   Color = Color::Rgb(30,  30,  45 );  // slate border
-pub const C_BORDER_F: Color = Color::Rgb(99,  102, 241);  // INDIGO - focus border
-pub const C_TEXT:     Color = Color::Rgb(230, 230, 240);  // ice white
-pub const C_DIM:      Color = Color::Rgb(100, 105, 130);  // slate gray
-pub const C_ACCENT:   Color = Color::Rgb(99,  102, 241);  // VIBRANT INDIGO
-pub const C_GREEN:    Color = Color::Rgb(34,  197, 94 );  // emerald
-pub const C_RED:      Color = Color::Rgb(239, 68,  68 );  // rose
-pub const C_CYAN:     Color = Color::Rgb(6,   182, 212);  // sky
-pub const C_SCORE:    Color = Color::Rgb(245, 158, 11 );  // amber
+pub const C_BG:       Color = Color::Rgb(0,   0,   0  );  // pure black
+pub const C_BG2:      Color = Color::Rgb(10,  10,  10 );  // slightly off-black
+pub const C_BG3:      Color = Color::Rgb(18,  18,  18 );  // card bg
+pub const C_PANEL:    Color = Color::Rgb(8,   8,   8  );  // panel bg
+pub const C_BORDER:   Color = Color::Rgb(38,  38,  38 );  // dim border
+pub const C_BORDER_F: Color = Color::Rgb(220, 220, 220);  // focused border — bright white
+pub const C_TEXT:     Color = Color::Rgb(240, 240, 240);  // near-white text
+pub const C_DIM:      Color = Color::Rgb(90,  90,  90 );  // muted text
+pub const C_ACCENT:   Color = Color::Rgb(255, 255, 0  );  // pure yellow — the ONE accent
+pub const C_GREEN:    Color = Color::Rgb(0,   255, 128);  // success / ongoing
+pub const C_RED:      Color = Color::Rgb(255, 50,  50 );  // error / cancelled
+// pub const C_CYAN:     Color = Color::Rgb(0,   220, 255);  // movie type badge
+pub const C_SCORE:    Color = Color::Rgb(255, 200, 0  );  // score stars
 
 // ── Master draw ───────────────────────────────────────────────────────────────
 
