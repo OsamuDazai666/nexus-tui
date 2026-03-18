@@ -1,11 +1,11 @@
 use crate::app::App;
 use crate::ui::{C_ACCENT, C_DIM};
 use ratatui::{
-    buffer::Buffer,
+    // buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Widget},
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -24,7 +24,7 @@ pub fn draw_cover(f: &mut Frame, app: &App, area: Rect) {
             let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
             
             // Create a picker
-            let mut picker = ratatui_image::picker::Picker::from_query_stdio()
+            let picker = ratatui_image::picker::Picker::from_query_stdio()
                 .unwrap_or_else(|_| ratatui_image::picker::Picker::from_fontsize((8, 16)));
             
             // Create the protocol

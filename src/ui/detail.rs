@@ -1,11 +1,11 @@
 use crate::app::{App, Focus};
-use crate::ui::{focused_block, trunc, C_ACCENT, C_DIM,
+use crate::ui::{focused_block, C_ACCENT, C_DIM,
                 C_GREEN, C_PANEL, C_RED, C_SCORE, C_TEXT};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Paragraph, Wrap},
     Frame,
 };
 

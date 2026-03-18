@@ -229,21 +229,24 @@ async fn get_episode_url(id: &str, ep: u32, mode: &str, quality: &str) -> Result
     // generate_link for each provider — decode hex path and get_links
     let mut all_links: Vec<(String, String, Option<String>)> = Vec::new(); // (res, url, referer)
     let client = client();
-    let mut tasks = Vec::new();
+    let mut set = tokio::task::JoinSet::new();
 
     for (_name, encoded) in &providers {
         let path = hex_decipher(encoded);
         if path.is_empty() { continue; }
 
         let c = client.clone();
-        tasks.push(tokio::spawn(async move {
+        set.spawn(async move {
             get_links(&c, &path).await
-        }));
+        });
     }
 
-    for task in tasks {
-        if let Ok(Ok(links)) = task.await {
-            all_links.extend(links);
+    while let Some(res) = set.join_next().await {
+        if let Ok(Ok(links)) = res {
+            if !links.is_empty() {
+                all_links.extend(links);
+                break; // Found our links! Drop the set to abort lagging tasks.
+            }
         }
     }
 

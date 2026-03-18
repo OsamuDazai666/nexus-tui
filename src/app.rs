@@ -231,6 +231,8 @@ impl App {
             AppMsg::ImageLoaded(bytes)  => { self.cover_image = Some(bytes); }
             AppMsg::RecsLoaded(items)   => { self.recommendations = items; self.recs_idx = 0; }
             AppMsg::StreamUrl(url) => {
+                self.is_searching = false;
+                self.status = "Playing".to_string();
                 self.toast_success("Launching mpv…");
                 if let Err(e) = player::launch_mpv_url(&url) {
                     self.toast_error(format!("mpv: {e}"));
@@ -581,6 +583,9 @@ impl App {
 
     pub async fn do_play(&mut self, item: ContentItem) {
         self.toast_info("Resolving stream…");
+        self.is_searching = true;
+        self.status = "Resolving stream…".to_string();
+        
         let tx = self.msg_tx.clone();
         let db = self.db.clone();
         tokio::spawn(async move {

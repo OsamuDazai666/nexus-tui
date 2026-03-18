@@ -1,6 +1,7 @@
 //! Config loader — reads ~/.config/nexus/config.toml
 //! Falls back gracefully to env vars and defaults.
 
+#![allow(dead_code)]
 use anyhow::Result;
 use serde::Deserialize;
 use std::path::PathBuf;

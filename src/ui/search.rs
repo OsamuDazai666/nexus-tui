@@ -1,5 +1,5 @@
 use crate::app::{App, Focus};
-use crate::ui::{focused_block, trunc, C_ACCENT, C_BG, C_BG2, C_BG3,
+use crate::ui::{trunc, C_ACCENT, C_BG2, C_BG3,
                 C_BORDER_F, C_CYAN, C_DIM, C_GREEN, C_PANEL, C_SCORE, C_TEXT};
 use ratatui::{
     layout::Rect,
