@@ -51,7 +51,6 @@ pub fn draw(f: &mut Frame, app: &App) {
     draw_body(f, app, root[1]);
     draw_statusbar(f, app, root[2]);
     draw_toasts(f, app, area);
-    draw_episode_prompt(f, app, area);
 }
 
 // ── Header ────────────────────────────────────────────────────────────────────
@@ -144,19 +143,20 @@ fn draw_body(f: &mut Frame, app: &App, area: Rect) {
 fn draw_right(f: &mut Frame, app: &App, area: Rect) {
     let rows = Layout::vertical([
         Constraint::Percentage(45),
-        Constraint::Percentage(33),
-        Constraint::Percentage(22),
+        Constraint::Min(0),
     ]).split(area);
 
     let top = Layout::horizontal([
         Constraint::Length(20),
-        Constraint::Min(0),
+        Constraint::Percentage(50),
+        Constraint::Percentage(50),
     ]).split(rows[0]);
 
     image::draw_cover(f, app, top[0]);
-    detail::draw_meta(f, app, top[1]);
-    detail::draw_synopsis(f, app, rows[1]);
-    detail::draw_recommendations(f, app, rows[2]);
+    crate::ui::detail::draw_meta(f, app, top[1]);
+    crate::ui::detail::draw_synopsis(f, app, top[2]);
+
+    crate::ui::detail::draw_episode_grid(f, app, rows[1]);
 }
 
 // ── Status bar ────────────────────────────────────────────────────────────────
@@ -245,123 +245,4 @@ pub fn trunc(s: &str, max: usize) -> String {
     else { c[..max.saturating_sub(1)].iter().collect::<String>() + "…" }
 }
 
-// ── Episode selector overlay ──────────────────────────────────────────────────
-
-pub fn draw_episode_prompt(f: &mut Frame, app: &App, area: Rect) {
-    use crate::app::Focus;
-    if app.focus != Focus::EpisodePrompt { return; }
-
-    let w: u16 = (area.width * 7 / 10).max(60);
-    let h: u16 = (area.height * 7 / 10).max(20);
-    let x = (area.width.saturating_sub(w)) / 2;
-    let y = (area.height.saturating_sub(h)) / 2;
-    let outer = Rect { x, y, width: w, height: h };
-
-    f.render_widget(Clear, outer);
-
-    // Outer border
-    f.render_widget(
-        Block::default()
-            .title(Span::styled(
-                format!(" SELECT EPISODE  [TAB] {}/{} [Q] quality:{} [ESC] back ",
-                    app.stream_mode.to_uppercase(),
-                    if app.stream_mode == "sub" { "DUB" } else { "SUB" },
-                    app.stream_quality),
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
-            ))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(C_ACCENT))
-            .style(Style::default().bg(C_BG3)),
-        outer,
-    );
-
-    let inner = Rect {
-        x: outer.x + 1, y: outer.y + 1,
-        width: outer.width.saturating_sub(2),
-        height: outer.height.saturating_sub(2),
-    };
-
-    // Layout: input row on top, episode grid below, hints at bottom
-    let rows = Layout::vertical([
-        Constraint::Length(3),   // input
-        Constraint::Min(0),      // episode grid
-        Constraint::Length(1),   // hints
-    ]).split(inner);
-
-    // Input row
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(" Episode: ", Style::default().fg(C_DIM)),
-            Span::styled(&app.episode_input, Style::default().fg(C_TEXT).add_modifier(Modifier::BOLD)),
-            Span::styled("▌", Style::default().fg(C_ACCENT)),
-            Span::styled(
-                format!("   {} episodes available", app.episode_list.len()),
-                Style::default().fg(C_DIM),
-            ),
-        ]))
-        .block(Block::default()
-            .borders(Borders::BOTTOM)
-            .border_style(Style::default().fg(C_BORDER)))
-        .style(Style::default().bg(C_BG3)),
-        rows[0],
-    );
-
-    // Episode grid — chips in rows of ~8
-    let cols_per_row = ((rows[1].width as usize).saturating_sub(2)) / 8;
-    let cols_per_row = cols_per_row.max(4);
-
-    // Get watched episodes from history
-    let watched: std::collections::HashSet<String> = app.history.iter()
-        .filter(|e| app.selected.as_ref().map(|s| s.id() == e.id).unwrap_or(false))
-        .filter_map(|e| e.progress.map(|p| p.to_string()))
-        .collect();
-
-    let current_ep = app.episode_input.trim().to_string();
-
-    let mut grid_lines: Vec<Line> = Vec::new();
-    let eps = &app.episode_list;
-
-    if eps.is_empty() {
-        grid_lines.push(Line::from(""));
-        grid_lines.push(Line::from(Span::styled(
-            "  Loading episodes…",
-            Style::default().fg(C_DIM),
-        )));
-    } else {
-        for chunk in eps.chunks(cols_per_row) {
-            let mut spans: Vec<Span> = vec![Span::raw(" ")];
-            for ep in chunk {
-                let is_selected = ep == &current_ep;
-                let is_watched  = watched.contains(ep);
-
-                let ep_display = format!(" {:>3} ", ep);
-                let style = if is_selected {
-                    Style::default().fg(Color::Rgb(0,0,0)).bg(C_ACCENT).add_modifier(Modifier::BOLD)
-                } else if is_watched {
-                    // Watched: dark grey — clearly played
-                    Style::default().fg(Color::Rgb(45,45,45)).bg(Color::Rgb(18,18,18))
-                } else {
-                    Style::default().fg(Color::Rgb(180,180,180)).bg(Color::Rgb(28,28,28))
-                };
-                spans.push(Span::styled(ep_display, style));
-                spans.push(Span::styled(" ", Style::default().bg(C_BG3)));
-            }
-            grid_lines.push(Line::from(spans));
-        }
-    }
-
-    f.render_widget(
-        Paragraph::new(grid_lines).style(Style::default().bg(C_BG3)),
-        rows[1],
-    );
-
-    // Hints bar
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(" [↵] PLAY", Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("   [jk/↑↓] navigate   [TAB] sub/dub   [Q] quality   [ESC] cancel",
-                Style::default().fg(Color::Rgb(50,50,50))),
-        ])).style(Style::default().bg(C_BG3)),
-        rows[2],
-    );
-}
+// (draw_episode_prompt moved to detail::draw_episode_grid)

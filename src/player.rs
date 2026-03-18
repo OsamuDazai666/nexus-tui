@@ -72,27 +72,38 @@ pub async fn fetch_episode_list(show_id: &str, mode: &str) -> Result<Vec<String>
     episodes_list(show_id, mode).await
 }
 
-/// Launch mpv detached (nohup ... &) exactly like ani-cli does
 pub fn launch_mpv_url(url: &str) -> Result<()> {
-    // ani-cli: nohup mpv --force-media-title="..." "$episode" $subs_flag $refr_flag >/dev/null 2>&1 &
+    // Sanitize double-protocol URLs (e.g. https://https://...)
+    let url = url.replace("https://https://", "https://")
+                 .replace("http://http://", "http://");
+    let url = url.as_str();
+
     let needs_referer = url.contains("fast4speed") || url.contains("clock.json")
         || url.contains(".m3u8");
 
-    let mut cmd = Command::new("mpv");
-    cmd.arg("--force-window=yes")
-       .arg("--no-terminal")
-       .arg(url);
+    // Decouple from ratatui
+    crossterm::terminal::disable_raw_mode()?;
+    crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen)?;
 
+    let mut cmd = Command::new("mpv");
+    cmd.arg(url);
+
+    // mpv expects each header as a separate --http-header-fields-append arg
+    cmd.arg(format!("--http-header-fields-append=User-Agent: {}", AGENT));
     if needs_referer {
-        cmd.arg(format!("--referrer={ALLANIME_REFR}"));
+        cmd.arg(format!("--http-header-fields-append=Referer: {}", ALLANIME_REFR));
     }
 
-    // Detach — stdout/stderr → /dev/null, like nohup ... &
-    cmd.stdin(Stdio::null())
-       .stdout(Stdio::null())
-       .stderr(Stdio::null());
+    println!("Launching MPV with URL: {}", url);
 
-    cmd.spawn().map_err(|e| anyhow!(
+    // Run the player in the terminal
+    let status = cmd.status();
+
+    // Reattach to ratatui
+    crossterm::terminal::enable_raw_mode()?;
+    crossterm::execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen, crossterm::event::EnableMouseCapture)?;
+
+    status.map_err(|e| anyhow!(
         "Failed to launch mpv: {e}\nInstall: sudo apt install mpv"
     ))?;
     Ok(())
@@ -218,14 +229,21 @@ async fn get_episode_url(id: &str, ep: u32, mode: &str, quality: &str) -> Result
     // generate_link for each provider — decode hex path and get_links
     let mut all_links: Vec<(String, String, Option<String>)> = Vec::new(); // (res, url, referer)
     let client = client();
+    let mut tasks = Vec::new();
 
-    for (name, encoded) in &providers {
+    for (_name, encoded) in &providers {
         let path = hex_decipher(encoded);
         if path.is_empty() { continue; }
 
-        match get_links(&client, &path).await {
-            Ok(links) => all_links.extend(links),
-            Err(_) => continue,
+        let c = client.clone();
+        tasks.push(tokio::spawn(async move {
+            get_links(&c, &path).await
+        }));
+    }
+
+    for task in tasks {
+        if let Ok(Ok(links)) = task.await {
+            all_links.extend(links);
         }
     }
 
@@ -392,7 +410,11 @@ fn expand_wixmp(url: &str) -> Vec<(String, String, Option<String>)> {
                 .split(',')
                 .filter(|r| !r.is_empty())
                 .map(|r| {
-                    let u = format!("https://{base_path}/{r}{suffix}");
+                    // Strip the protocol manually if it exists from the base_path
+                    let clean_base = base_path
+                        .trim_start_matches("https://")
+                        .trim_start_matches("http://");
+                    let u = format!("https://{clean_base}/{r}{suffix}");
                     (r.to_string(), u, None)
                 })
                 .collect();
@@ -426,7 +448,7 @@ fn extract_between<'a>(s: &'a str, start: &str, end: &str) -> Option<&'a str> {
 fn client() -> reqwest::Client {
     reqwest::Client::builder()
         .user_agent(AGENT)
-        .timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(30))
         .default_headers({
             let mut h = reqwest::header::HeaderMap::new();
             h.insert("Referer", reqwest::header::HeaderValue::from_static(ALLANIME_REFR));

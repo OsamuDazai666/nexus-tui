@@ -125,6 +125,7 @@ pub struct App {
     pub status:   String,
 
     pub image_protocol: ImageProtocol,
+    pub needs_redraw: bool,
 }
 
 impl App {
@@ -166,6 +167,7 @@ impl App {
             toasts:   Vec::new(),
             status:   "Type to search  •  F1-F5 switch tabs".to_string(),
             image_protocol: protocol,
+            needs_redraw:  false,
         })
     }
 
@@ -233,6 +235,7 @@ impl App {
                 if let Err(e) = player::launch_mpv_url(&url) {
                     self.toast_error(format!("mpv: {e}"));
                 }
+                self.needs_redraw = true;
             }
             AppMsg::EpisodeList(eps) => {
                 self.episode_list = eps;
@@ -272,9 +275,9 @@ impl App {
             Focus::Search          => self.key_search(key).await?,
             Focus::Results         => self.key_results(key).await?,
             Focus::Detail          => self.key_detail(key).await?,
-            Focus::Recommendations => self.key_recs(key).await?,
             Focus::History         => self.key_history(key).await?,
             Focus::EpisodePrompt   => self.key_episode_prompt(key).await?,
+            _ => Default::default(),
         }
         Ok(false)
     }
@@ -369,28 +372,7 @@ impl App {
             KeyCode::PageUp   => { self.detail_scroll = self.detail_scroll.saturating_sub(10); }
             KeyCode::PageDown => { self.detail_scroll += 10; }
             KeyCode::Char('p') => { self.resolve_and_play().await; }
-            KeyCode::Char('r') => { self.focus = Focus::Recommendations; }
             KeyCode::Left | KeyCode::Esc => { self.focus = Focus::Results; }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    async fn key_recs(&mut self, key: KeyEvent) -> Result<()> {
-        match key.code {
-            KeyCode::Up   | KeyCode::Char('k') => { if self.recs_idx > 0 { self.recs_idx -= 1; } }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if self.recs_idx + 1 < self.recommendations.len() { self.recs_idx += 1; }
-            }
-            KeyCode::Enter => {
-                if let Some(rec) = self.recommendations.get(self.recs_idx).cloned() {
-                    self.results.insert(0, rec.clone());
-                    self.results_idx = 0;
-                    self.load_detail(rec);
-                    self.focus = Focus::Detail;
-                }
-            }
-            KeyCode::Esc | KeyCode::Left => { self.focus = Focus::Detail; }
             _ => {}
         }
         Ok(())

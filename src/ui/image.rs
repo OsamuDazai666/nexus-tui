@@ -19,16 +19,22 @@ pub fn draw_cover(f: &mut Frame, app: &App, area: Rect) {
             let inner = block.inner(area);
             f.render_widget(block, area);
 
-            let pw = (inner.width as u32).max(1);
-            let ph = (inner.height as u32 * 2).max(1);
-            let resized = img.resize_exact(pw, ph, image::imageops::FilterType::Triangle);
-            let rgba    = resized.to_rgba8();
-            f.render_widget(HalfBlock { rgba }, inner);
+            // If we have a native protocol, we can use ratatui-image
+            // First we need to convert to dynamic image
+            let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
+            
+            // Create a picker
+            let mut picker = ratatui_image::picker::Picker::from_query_stdio()
+                .unwrap_or_else(|_| ratatui_image::picker::Picker::from_fontsize((8, 16)));
+            
+            // Create the protocol
+            let mut protocol = picker.new_resize_protocol(dyn_img);
+            let image_widget = ratatui_image::StatefulImage::default()
+                .resize(ratatui_image::Resize::Fit(Some(image::imageops::FilterType::Lanczos3)));
+            f.render_stateful_widget(image_widget, inner, &mut protocol);
             return;
         }
     }
-
-    // Placeholder
     let loading = app.is_searching || (app.selected.is_some() && app.cover_image.is_none());
     f.render_widget(
         Paragraph::new(vec![
@@ -52,35 +58,3 @@ pub fn draw_cover(f: &mut Frame, app: &App, area: Rect) {
     );
 }
 
-struct HalfBlock { rgba: image::RgbaImage }
-
-impl Widget for HalfBlock {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let (iw, ih) = self.rgba.dimensions();
-        for row in 0..area.height {
-            for col in 0..area.width {
-                let px      = col as u32;
-                let py_top  = (row * 2) as u32;
-                let py_bot  = py_top + 1;
-
-                let top = pixel_color(&self.rgba, px, py_top, iw, ih);
-                let bot = pixel_color(&self.rgba, px, py_bot, iw, ih);
-
-                if let Some(cell) = buf.cell_mut((area.x + col, area.y + row)) {
-                    cell.set_char('▀');
-                    cell.set_fg(top);
-                    cell.set_bg(bot);
-                }
-            }
-        }
-    }
-}
-
-fn pixel_color(img: &image::RgbaImage, x: u32, y: u32, w: u32, h: u32) -> Color {
-    if x < w && y < h {
-        let p = img.get_pixel(x, y);
-        Color::Rgb(p[0], p[1], p[2])
-    } else {
-        Color::Rgb(0, 0, 0)
-    }
-}

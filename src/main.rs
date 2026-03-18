@@ -47,6 +47,10 @@ async fn run<B: ratatui::backend::Backend>(
     app: &mut App,
 ) -> Result<()> {
     loop {
+        if app.needs_redraw {
+            terminal.clear()?;
+            app.needs_redraw = false;
+        }
         terminal.draw(|f| ui::draw(f, app))?;
 
         // Poll for input (non-blocking — 100ms max)
