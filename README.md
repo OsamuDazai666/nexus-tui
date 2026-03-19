@@ -1,8 +1,6 @@
 # ◈ nexus-tui
 
-**WARNING**: This is a work in progress and is not yet ready for production use.
-
-A ~~blazing-fast~~ terminal UI for **Anime**, **Movies**, **TV** and **Manga** — 
+A blazing-fast terminal UI for **Anime**, **Movies**, **TV** and **Manga** — 
 website-quality browsing, zero browser required.
 
 ```
