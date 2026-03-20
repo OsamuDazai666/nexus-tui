@@ -54,7 +54,6 @@ function Build-FromSource {
             scoop install mingw
         } elseif ($HAS_WINGET) {
             winget install --id MSYS2.MSYS2 -e --silent
-            # Add mingw64 bin to PATH
             $mingwBin = "C:\msys64\mingw64\bin"
             if (Test-Path $mingwBin) {
                 $env:PATH += ";$mingwBin"
@@ -71,6 +70,10 @@ function Build-FromSource {
 
     # ── Clone & build ─────────────────────────────────────────────────────────
     $TMP = "$env:TEMP\nexus-build"
+
+    # Make sure we're NOT inside the temp dir before touching it
+    Set-Location $env:USERPROFILE
+
     if (Test-Path $TMP) { Remove-Item $TMP -Recurse -Force }
 
     Write-Step "Cloning nexus-tui..."
@@ -79,16 +82,18 @@ function Build-FromSource {
     Push-Location $TMP
     Write-Step "Compiling... (this takes about a minute)"
     cargo build --release
+    Pop-Location
 
-    if (-not (Test-Path "target\release\nexus.exe")) {
-        Pop-Location
+    # Back to home before cleanup so the dir is never in use
+    Set-Location $env:USERPROFILE
+
+    if (-not (Test-Path "$TMP\target\release\nexus.exe")) {
         Write-Warn "Build failed — nexus.exe was not produced."
         exit 1
     }
 
     New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
-    Copy-Item "target\release\nexus.exe" "$INSTALL_DIR\nexus.exe"
-    Pop-Location
+    Copy-Item "$TMP\target\release\nexus.exe" "$INSTALL_DIR\nexus.exe"
     Remove-Item $TMP -Recurse -Force
     Write-Ok "Built and installed to $INSTALL_DIR\nexus.exe"
 }
@@ -115,9 +120,13 @@ if (-not $HAS_SCOOP) {
 
 if (-not (Get-Command kitty -ErrorAction SilentlyContinue)) {
     Write-Step "Installing Kitty terminal..."
+    $kittyInstalled = $false
     if ($HAS_WINGET) {
         winget install --id kovidgoyal.kitty -e --silent
-    } else {
+        Update-SessionPath
+        $kittyInstalled = [bool](Get-Command kitty -ErrorAction SilentlyContinue)
+    }
+    if (-not $kittyInstalled) {
         scoop bucket add extras
         scoop install kitty
     }
@@ -130,9 +139,13 @@ if (-not (Get-Command kitty -ErrorAction SilentlyContinue)) {
 
 if (-not (Get-Command mpv -ErrorAction SilentlyContinue)) {
     Write-Step "Installing mpv..."
+    $mpvInstalled = $false
     if ($HAS_WINGET) {
         winget install --id mpv.mpv -e --silent
-    } else {
+        Update-SessionPath
+        $mpvInstalled = [bool](Get-Command mpv -ErrorAction SilentlyContinue)
+    }
+    if (-not $mpvInstalled) {
         scoop install mpv
     }
     Write-Ok "mpv installed"
