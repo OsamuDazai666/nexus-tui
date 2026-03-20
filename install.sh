@@ -25,7 +25,7 @@ case "$OS" in
 esac
 
 case "$ARCH" in
-  x86_64|amd64) ARCH_TAG="x86_64" ;;
+  x86_64|amd64)  ARCH_TAG="x86_64" ;;
   aarch64|arm64) ARCH_TAG="aarch64" ;;
   *) echo -e "${RED}Unsupported arch: $ARCH${RESET}"; exit 1 ;;
 esac
@@ -60,7 +60,7 @@ install_pkg() {
   fi
 }
 
-# ── build_from_source — defined here so it's available when called below ──────
+# ── Build from source ─────────────────────────────────────────────────────────
 
 build_from_source() {
   if ! has cargo; then
@@ -77,10 +77,12 @@ build_from_source() {
   echo -e "${CYAN}Cloning nexus-tui...${RESET}"
   git clone "https://github.com/${REPO}.git" "$TMP/nexus-tui"
   cd "$TMP/nexus-tui"
+  echo -e "${CYAN}Compiling... (this takes about a minute)${RESET}"
   cargo build --release
   cp target/release/nexus "$INSTALL_DIR/nexus"
+  chmod +x "$INSTALL_DIR/nexus"
   cd - && rm -rf "$TMP"
-  echo -e "${GREEN}✓ Built and installed${RESET}"
+  echo -e "${GREEN}✓ Built and installed to $INSTALL_DIR/nexus${RESET}"
 }
 
 # ── Homebrew (macOS) ──────────────────────────────────────────────────────────
@@ -98,10 +100,8 @@ install_kitty() {
     brew install --cask kitty
   else
     curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin
-    # Symlink to PATH
     ln -sf "$HOME/.local/kitty.app/bin/kitty" "$INSTALL_DIR/kitty" 2>/dev/null || true
     ln -sf "$HOME/.local/kitty.app/bin/kitten" "$INSTALL_DIR/kitten" 2>/dev/null || true
-    # Desktop entry
     cp "$HOME/.local/kitty.app/share/applications/kitty.desktop" \
        "$HOME/.local/share/applications/" 2>/dev/null || true
     sed -i "s|Icon=kitty|Icon=$HOME/.local/kitty.app/share/icons/hicolor/256x256/apps/kitty.png|g" \
@@ -151,13 +151,11 @@ if [ -z "$TMDB_API_KEY" ]; then
   read -rp "  Enter TMDB API key (Enter to skip): " KEY
   if [ -n "$KEY" ]; then
     export TMDB_API_KEY="$KEY"
-    # Detect shell rc file
     SHELL_RC=""
-    [ -f "$HOME/.zshrc" ]  && SHELL_RC="$HOME/.zshrc"
-    [ -f "$HOME/.bashrc" ] && SHELL_RC="$HOME/.bashrc"
+    [ -f "$HOME/.zshrc" ]   && SHELL_RC="$HOME/.zshrc"
+    [ -f "$HOME/.bashrc" ]  && SHELL_RC="$HOME/.bashrc"
     [ -f "$HOME/.profile" ] && [ -z "$SHELL_RC" ] && SHELL_RC="$HOME/.profile"
     if [ -n "$SHELL_RC" ]; then
-      # Remove old entry if present
       grep -v "TMDB_API_KEY" "$SHELL_RC" > "${SHELL_RC}.tmp" && mv "${SHELL_RC}.tmp" "$SHELL_RC"
       echo "export TMDB_API_KEY=\"$KEY\"" >> "$SHELL_RC"
       echo -e "${GREEN}✓ Saved to $SHELL_RC${RESET}"
@@ -165,21 +163,11 @@ if [ -z "$TMDB_API_KEY" ]; then
   fi
 fi
 
-# ── Download nexus binary ─────────────────────────────────────────────────────
+# ── Build & install nexus ─────────────────────────────────────────────────────
 
 echo ""
-echo -e "${CYAN}Downloading nexus-tui...${RESET}"
-
-BINARY_URL="https://github.com/${REPO}/releases/latest/download/nexus-${PLATFORM}-${ARCH_TAG}"
-
-if curl -fsSL "$BINARY_URL" -o "$INSTALL_DIR/nexus"; then
-  chmod +x "$INSTALL_DIR/nexus"
-  echo -e "${GREEN}✓ nexus installed to $INSTALL_DIR/nexus${RESET}"
-else
-  # Binary not available — build from source
-  echo -e "${YELLOW}Pre-built binary not found — building from source...${RESET}"
-  build_from_source
-fi
+echo -e "${CYAN}Building nexus-tui from source...${RESET}"
+build_from_source
 
 # ── PATH check ────────────────────────────────────────────────────────────────
 

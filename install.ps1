@@ -17,7 +17,7 @@ function Update-SessionPath {
                 [System.Environment]::GetEnvironmentVariable("PATH", "User")
 }
 
-# ── Build from source — defined here so it's available when called below ──────
+# ── Build from source ─────────────────────────────────────────────────────────
 
 function Build-FromSource {
     if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
@@ -34,17 +34,21 @@ function Build-FromSource {
             Write-Warn "winget not found — please install Git manually from https://git-scm.com then re-run this script"
             exit 1
         }
+        Write-Step "Installing Git..."
         winget install --id Git.Git -e --silent
         Update-SessionPath
     }
     $TMP = "$env:TEMP\nexus-build"
+    Write-Step "Cloning nexus-tui..."
     git clone "https://github.com/$REPO.git" $TMP
     Push-Location $TMP
+    Write-Step "Compiling... (this takes about a minute)"
     cargo build --release
+    New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
+    Copy-Item "target\release\nexus.exe" "$INSTALL_DIR\nexus.exe"
     Pop-Location
-    Copy-Item "target\release\nexus.exe" $BINARY_PATH
     Remove-Item $TMP -Recurse -Force
-    Write-Ok "Built from source"
+    Write-Ok "Built and installed to $INSTALL_DIR\nexus.exe"
 }
 
 Write-Host ""
@@ -119,22 +123,11 @@ if (-not $CURRENT_KEY) {
     }
 }
 
-# ── Download nexus binary ─────────────────────────────────────────────────────
+# ── Build & install nexus ─────────────────────────────────────────────────────
 
 Write-Host ""
-Write-Step "Downloading nexus-tui..."
-New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
-
-$BINARY_URL  = "https://github.com/$REPO/releases/latest/download/nexus-windows-x86_64.exe"
-$BINARY_PATH = "$INSTALL_DIR\nexus.exe"
-
-try {
-    Invoke-WebRequest -Uri $BINARY_URL -OutFile $BINARY_PATH -UseBasicParsing
-    Write-Ok "nexus.exe downloaded to $INSTALL_DIR"
-} catch {
-    Write-Warn "Pre-built binary not available — building from source..."
-    Build-FromSource
-}
+Write-Step "Building nexus-tui from source..."
+Build-FromSource
 
 # ── Add to PATH ───────────────────────────────────────────────────────────────
 
@@ -147,9 +140,9 @@ if ($CURRENT_PATH -notlike "*$INSTALL_DIR*") {
     Write-Ok "Added $INSTALL_DIR to PATH"
 }
 
-# ── Desktop shortcut (opens in Kitty) ─────────────────────────────────────────
+# ── Desktop shortcut (opens in Kitty) ────────────────────────────────────────
 
-$kittyCmd  = Get-Command kitty -ErrorAction SilentlyContinue
+$kittyCmd   = Get-Command kitty -ErrorAction SilentlyContinue
 $KITTY_PATH = if ($kittyCmd) { $kittyCmd.Source } else { $null }
 
 if ($KITTY_PATH) {
