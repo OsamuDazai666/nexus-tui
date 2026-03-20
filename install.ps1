@@ -6,24 +6,24 @@ $ErrorActionPreference = "Stop"
 $REPO = "OsamuDazai666/nexus-tui"
 $INSTALL_DIR = "$env:LOCALAPPDATA\nexus-tui"
 
-function Write-Step  { Write-Host "  $args" -ForegroundColor Cyan }
-function Write-Ok    { Write-Host "  ✓ $args" -ForegroundColor Green }
-function Write-Warn  { Write-Host "  ⚠ $args" -ForegroundColor Yellow }
+function Write-Step  { Write-Host "  >> $args" -ForegroundColor Cyan }
+function Write-Ok    { Write-Host "  OK $args" -ForegroundColor Green }
+function Write-Warn  { Write-Host "  !! $args" -ForegroundColor Yellow }
 
-# ── Refresh PATH from environment (replaces refreshenv) ──────────────────────
+# -- Refresh PATH from environment (replaces refreshenv) ----------------------
 
 function Update-SessionPath {
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
                 [System.Environment]::GetEnvironmentVariable("PATH", "User")
 }
 
-# ── Build from source ─────────────────────────────────────────────────────────
+# -- Build from source --------------------------------------------------------
 
 function Build-FromSource {
-    # ── Git ───────────────────────────────────────────────────────────────────
+    # -- Git ------------------------------------------------------------------
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         if (-not $HAS_WINGET) {
-            Write-Warn "winget not found — please install Git manually from https://git-scm.com then re-run this script"
+            Write-Warn "winget not found -- please install Git manually from https://git-scm.com then re-run this script"
             exit 1
         }
         Write-Step "Installing Git..."
@@ -31,10 +31,10 @@ function Build-FromSource {
         Update-SessionPath
     }
 
-    # ── Rust (GNU toolchain — no Visual Studio needed) ────────────────────────
+    # -- Rust (GNU toolchain -- no Visual Studio needed) ----------------------
     if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
         if (-not $HAS_WINGET) {
-            Write-Warn "winget not found — please install Rust manually from https://rustup.rs then re-run this script"
+            Write-Warn "winget not found -- please install Rust manually from https://rustup.rs then re-run this script"
             exit 1
         }
         Write-Step "Installing Rust..."
@@ -47,7 +47,7 @@ function Build-FromSource {
     rustup toolchain install stable-x86_64-pc-windows-gnu --no-self-update | Out-Null
     rustup default stable-x86_64-pc-windows-gnu | Out-Null
 
-    # ── mingw64 (provides the GNU linker) ─────────────────────────────────────
+    # -- mingw64 (provides the GNU linker) ------------------------------------
     if (-not (Get-Command x86_64-w64-mingw32-gcc -ErrorAction SilentlyContinue)) {
         Write-Step "Installing mingw-w64 (GNU linker for Rust)..."
         if ($HAS_SCOOP) {
@@ -68,10 +68,10 @@ function Build-FromSource {
         Update-SessionPath
     }
 
-    # ── Clone & build ─────────────────────────────────────────────────────────
+    # -- Clone & build --------------------------------------------------------
     $TMP = "$env:TEMP\nexus-build"
 
-    # Make sure we're NOT inside the temp dir before touching it
+    # Make sure we are NOT inside the temp dir before touching it
     Set-Location $env:USERPROFILE
 
     if (Test-Path $TMP) { Remove-Item $TMP -Recurse -Force }
@@ -88,21 +88,26 @@ function Build-FromSource {
     Set-Location $env:USERPROFILE
 
     if (-not (Test-Path "$TMP\target\release\nexus.exe")) {
-        Write-Warn "Build failed — nexus.exe was not produced."
+        Write-Warn "Build failed -- nexus.exe was not produced."
         exit 1
     }
 
     New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
+
+    # Kill any running nexus process so the exe is not locked during copy
+    Get-Process -Name "nexus" -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Milliseconds 500
+
     Copy-Item "$TMP\target\release\nexus.exe" "$INSTALL_DIR\nexus.exe"
     Remove-Item $TMP -Recurse -Force
     Write-Ok "Built and installed to $INSTALL_DIR\nexus.exe"
 }
 
 Write-Host ""
-Write-Host "  ◆ nexus-tui installer" -ForegroundColor Yellow -BackgroundColor Black
+Write-Host "  nexus-tui installer" -ForegroundColor Yellow -BackgroundColor Black
 Write-Host ""
 
-# ── Winget / Scoop check ──────────────────────────────────────────────────────
+# -- Winget / Scoop check -----------------------------------------------------
 
 $HAS_WINGET = [bool](Get-Command winget -ErrorAction SilentlyContinue)
 $HAS_SCOOP  = [bool](Get-Command scoop  -ErrorAction SilentlyContinue)
@@ -116,29 +121,7 @@ if (-not $HAS_SCOOP) {
     Write-Ok "Scoop installed"
 }
 
-# ── WezTerm ───────────────────────────────────────────────────────────────────
-# WezTerm is used instead of Kitty because Kitty has no native Windows support.
-# WezTerm supports the Kitty graphics protocol natively on Windows, giving
-# the same image quality.
-
-if (-not (Get-Command wezterm -ErrorAction SilentlyContinue)) {
-    Write-Step "Installing WezTerm terminal..."
-    $weztermInstalled = $false
-    if ($HAS_WINGET) {
-        winget install --id wez.wezterm -e --silent
-        Update-SessionPath
-        $weztermInstalled = [bool](Get-Command wezterm -ErrorAction SilentlyContinue)
-    }
-    if (-not $weztermInstalled) {
-        scoop bucket add extras
-        scoop install wezterm
-    }
-    Write-Ok "WezTerm installed"
-} else {
-    Write-Ok "WezTerm already installed"
-}
-
-# ── mpv ───────────────────────────────────────────────────────────────────────
+# -- mpv ----------------------------------------------------------------------
 
 if (-not (Get-Command mpv -ErrorAction SilentlyContinue)) {
     Write-Step "Installing mpv..."
@@ -156,7 +139,7 @@ if (-not (Get-Command mpv -ErrorAction SilentlyContinue)) {
     Write-Ok "mpv already installed"
 }
 
-# ── yt-dlp ────────────────────────────────────────────────────────────────────
+# -- yt-dlp -------------------------------------------------------------------
 
 if (-not (Get-Command yt-dlp -ErrorAction SilentlyContinue)) {
     Write-Step "Installing yt-dlp..."
@@ -166,7 +149,7 @@ if (-not (Get-Command yt-dlp -ErrorAction SilentlyContinue)) {
     Write-Ok "yt-dlp already installed"
 }
 
-# ── TMDB API Key ──────────────────────────────────────────────────────────────
+# -- TMDB API Key -------------------------------------------------------------
 
 $CURRENT_KEY = [System.Environment]::GetEnvironmentVariable("TMDB_API_KEY", "User")
 if (-not $CURRENT_KEY) {
@@ -181,13 +164,13 @@ if (-not $CURRENT_KEY) {
     }
 }
 
-# ── Build & install nexus ─────────────────────────────────────────────────────
+# -- Build & install nexus ----------------------------------------------------
 
 Write-Host ""
 Write-Step "Building nexus-tui from source..."
 Build-FromSource
 
-# ── Add to PATH ───────────────────────────────────────────────────────────────
+# -- Add to PATH --------------------------------------------------------------
 
 $CURRENT_PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User")
 if ($CURRENT_PATH -notlike "*$INSTALL_DIR*") {
@@ -198,23 +181,6 @@ if ($CURRENT_PATH -notlike "*$INSTALL_DIR*") {
     Write-Ok "Added $INSTALL_DIR to PATH"
 }
 
-# ── Desktop shortcut (opens in WezTerm) ──────────────────────────────────────
-
-$weztermCmd  = Get-Command wezterm -ErrorAction SilentlyContinue
-$WEZTERM_PATH = if ($weztermCmd) { $weztermCmd.Source } else { $null }
-
-if ($WEZTERM_PATH) {
-    $SHORTCUT_PATH = "$env:USERPROFILE\Desktop\nexus-tui.lnk"
-    $WSH = New-Object -ComObject WScript.Shell
-    $SC  = $WSH.CreateShortcut($SHORTCUT_PATH)
-    $SC.TargetPath       = $WEZTERM_PATH
-    $SC.Arguments        = "start -- nexus"
-    $SC.WorkingDirectory = $env:USERPROFILE
-    $SC.Description      = "nexus-tui — Anime/Movies/TV/Manga browser"
-    $SC.Save()
-    Write-Ok "Desktop shortcut created (opens in WezTerm)"
-}
-
 Write-Host ""
-Write-Host "  ◆ Done! Double-click the desktop shortcut or type 'nexus' in WezTerm." -ForegroundColor Yellow
+Write-Host "  Done! Type 'nexus' in your terminal to launch." -ForegroundColor Yellow
 Write-Host ""
