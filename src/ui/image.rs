@@ -34,7 +34,7 @@ pub fn draw_cover(f: &mut Frame, app: &mut App, area: Rect) {
         return;
     }
 
-    let loading = app.is_searching || (app.selected.is_some() && app.cover_image.is_none());
+    let loading = app.is_searching || (app.selected.is_some() && app.cover_protocol.is_none());
     f.render_widget(
         Paragraph::new(vec![
             Line::from(""),

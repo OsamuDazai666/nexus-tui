@@ -66,8 +66,11 @@ pub enum AppMsg {
     SearchResults { items: Vec<ContentItem>, gen: u64 },
     MoreResults(Vec<ContentItem>),
     DetailLoaded(ContentItem),
-    ImageFetched { url: String, bytes: Vec<u8> },
-    ImageLoaded(Vec<u8>),
+    /// Raw bytes fetched — url for byte cache, item_id travels with the bytes so decode
+    /// is tagged correctly even if the user scrolled away before the fetch completed
+    ImageFetched { url: String, item_id: String, bytes: Vec<u8> },
+    /// Decoded RGBA image ready — create StatefulProtocol and store in rgba_cache
+    ImageDecoded { id: String, image: image::DynamicImage },
     StreamUrl(String),
     EpisodeList { id: String, eps: Vec<String> },
     Error(String),
@@ -95,7 +98,6 @@ pub struct App {
     // Detail
     pub selected:     Option<ContentItem>,
     pub detail_scroll: u16,
-    pub cover_image:  Option<Vec<u8>>,
 
     // History
     pub history:     Vec<HistoryEntry>,
@@ -126,15 +128,13 @@ pub struct App {
     pub needs_redraw: bool,
 
     // ── In-memory caches ──────────────────────────────────────────────────────
-    // Cover images keyed by URL — avoids re-fetching the same image when
-    // scrolling back through results. Capped at IMAGE_CACHE_MAX entries (LRU).
     pub image_cache:  std::collections::HashMap<String, Vec<u8>>,
     image_cache_order: std::collections::VecDeque<String>,
-
-    // Detail cache keyed by item ID — stores episode list + recs so revisiting
-    // an already-seen result is instant. Capped at DETAIL_CACHE_MAX entries.
     pub detail_cache: std::collections::HashMap<String, CachedDetail>,
     detail_cache_order: std::collections::VecDeque<String>,
+    /// Decoded RGBA pixels keyed by item ID — skips JPEG/PNG decode on revisit.
+    /// new_resize_protocol() from raw RGBA is fast; only the decode is expensive.
+    pub rgba_cache: std::collections::HashMap<String, image::DynamicImage>,
 }
 
 const IMAGE_CACHE_MAX:  usize = 30;
@@ -166,7 +166,6 @@ impl App {
             has_more:      false,
             selected:      None,
             detail_scroll: 0,
-            cover_image:   None,
             history,
             history_idx:   0,
             episode_input:    String::new(),
@@ -190,6 +189,7 @@ impl App {
             image_cache_order: std::collections::VecDeque::new(),
             detail_cache:       std::collections::HashMap::new(),
             detail_cache_order: std::collections::VecDeque::new(),
+            rgba_cache:         std::collections::HashMap::new(),
         })
     }
 
@@ -249,14 +249,26 @@ impl App {
             }
             AppMsg::DetailLoaded(item) => { self.selected = Some(item); self.detail_scroll = 0; }
 
-            // Image fetched from network — store in cache, then render if still selected
-            AppMsg::ImageFetched { url, bytes } => {
+            // Bytes fetched — store in byte cache, spawn JPEG/PNG decode off main thread
+            AppMsg::ImageFetched { url, item_id, bytes } => {
                 self.cache_image(url, bytes.clone());
-                self.render_cover(bytes);
+                let tx = self.msg_tx.clone();
+                tokio::spawn(async move {
+                    if let Ok(img) = image::load_from_memory(&bytes) {
+                        let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
+                        let _ = tx.send(AppMsg::ImageDecoded { id: item_id, image: dyn_img });
+                    }
+                });
             }
-            // Image served directly from cache (legacy path, kept for compat)
-            AppMsg::ImageLoaded(bytes) => {
-                self.render_cover(bytes);
+
+            // Decoded RGBA ready — store in rgba_cache, build protocol if still selected
+            AppMsg::ImageDecoded { id, image } => {
+                // Store decoded pixels — future visits skip the decode entirely
+                self.rgba_cache.insert(id.clone(), image);
+                // Build and assign the protocol if this item is still on screen
+                if self.selected.as_ref().map(|s| s.id() == id).unwrap_or(false) {
+                    self.build_cover_protocol(&id);
+                }
             }
 
             // Episode list fetched — store in detail cache and apply if still selected
@@ -290,22 +302,28 @@ impl App {
 
     // ── Cache helpers ─────────────────────────────────────────────────────────
 
-    fn render_cover(&mut self, bytes: Vec<u8>) {
-        self.cover_protocol = None;
-        if let Ok(home) = std::env::var("HOME") {
-            let debug_dir = std::path::PathBuf::from(&home).join("Desktop").join("nexus-debug");
-            let _ = std::fs::create_dir_all(&debug_dir);
-            let name = self.selected.as_ref()
-                .map(|s| s.title().replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_"))
-                .unwrap_or_else(|| "unknown".to_string());
-            let ext = if bytes.starts_with(b"\x89PNG") { "png" } else { "jpg" };
-            let _ = std::fs::write(debug_dir.join(format!("{name}.{ext}")), &bytes);
+    /// Build cover_protocol from rgba_cache if available — fast path, no decode.
+    fn build_cover_protocol(&mut self, id: &str) {
+        if let Some(img) = self.rgba_cache.remove(id) {
+            let protocol = self.image_picker.new_resize_protocol(img.clone());
+            // Put the image back so future revisits can rebuild
+            self.rgba_cache.insert(id.to_string(), img);
+            self.cover_protocol = Some(protocol);
+            self.save_debug_image(id);
         }
-        if let Ok(img) = image::load_from_memory(&bytes) {
-            let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
-            self.cover_protocol = Some(self.image_picker.new_resize_protocol(dyn_img));
+    }
+
+    fn save_debug_image(&self, id: &str) {
+        if let Some(img) = self.rgba_cache.get(id) {
+            if let Ok(home) = std::env::var("HOME") {
+                let debug_dir = std::path::PathBuf::from(&home).join("Desktop").join("nexus-debug");
+                let _ = std::fs::create_dir_all(&debug_dir);
+                let name = self.selected.as_ref()
+                    .map(|s| s.title().replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_"))
+                    .unwrap_or_else(|| "unknown".to_string());
+                let _ = img.save(debug_dir.join(format!("{name}.png")));
+            }
         }
-        self.cover_image = Some(bytes);
     }
 
     fn cache_image(&mut self, url: String, bytes: Vec<u8>) {
@@ -338,36 +356,52 @@ impl App {
     fn prefetch_images(&self, start: usize, end: usize) {
         for item in self.results.get(start..end).unwrap_or(&[]) {
             let Some(url) = item.cover_url().map(String::from) else { continue };
-            if self.image_cache.contains_key(&url) { continue; }
+            let item_id = item.id().to_string();
+
+            // Skip if already decoded
+            if self.rgba_cache.contains_key(&item_id) { continue; }
 
             let tx = self.msg_tx.clone();
-            let url_clone = url.clone();
-            tokio::spawn(async move {
-                let client = reqwest::Client::builder()
-                    .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-                    .timeout(Duration::from_secs(15))
-                    .connect_timeout(Duration::from_secs(8))
-                    .build().unwrap_or_default();
-                for attempt in 0..2u8 {
-                    match client.get(&url_clone).header("Accept", "image/*").send().await {
-                        Ok(r) if r.status().is_success() => {
-                            match r.bytes().await {
-                                Ok(b) => {
-                                    let _ = tx.send(AppMsg::ImageFetched {
-                                        url: url_clone,
-                                        bytes: b.to_vec(),
-                                    });
-                                    return;
-                                }
-                                Err(_) if attempt == 0 => continue,
-                                Err(_) => return,
-                            }
-                        }
-                        Ok(_) if attempt == 0 => continue,
-                        _ => return,
+
+            if let Some(cached_bytes) = self.image_cache.get(&url).cloned() {
+                // Byte cache hit — just decode
+                tokio::spawn(async move {
+                    if let Ok(img) = image::load_from_memory(&cached_bytes) {
+                        let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
+                        let _ = tx.send(AppMsg::ImageDecoded { id: item_id, image: dyn_img });
                     }
-                }
-            });
+                });
+            } else {
+                // Full miss — fetch + decode
+                tokio::spawn(async move {
+                    let client = reqwest::Client::builder()
+                        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+                        .timeout(Duration::from_secs(15))
+                        .connect_timeout(Duration::from_secs(8))
+                        .build().unwrap_or_default();
+                    for attempt in 0..2u8 {
+                        match client.get(&url).header("Accept", "image/*").send().await {
+                            Ok(r) if r.status().is_success() => {
+                                match r.bytes().await {
+                                    Ok(b) => {
+                                        let bytes = b.to_vec();
+                                        let _ = tx.send(AppMsg::ImageFetched { url: url.clone(), item_id: item_id.clone(), bytes: bytes.clone() });
+                                        if let Ok(img) = image::load_from_memory(&bytes) {
+                                            let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
+                                            let _ = tx.send(AppMsg::ImageDecoded { id: item_id, image: dyn_img });
+                                        }
+                                        return;
+                                    }
+                                    Err(_) if attempt == 0 => continue,
+                                    Err(_) => return,
+                                }
+                            }
+                            Ok(_) if attempt == 0 => continue,
+                            _ => return,
+                        }
+                    }
+                });
+            }
         }
     }
 
@@ -512,10 +546,8 @@ impl App {
             KeyCode::Enter => {
                 let query = self.search_input.trim().to_string();
                 if query.is_empty() {
-                    // Empty input — clear results
                     self.results.clear();
                     self.selected = None;
-                    self.cover_image = None;
                     self.cover_protocol = None;
                     self.episode_list.clear();
                     self.status = "Type to search  •  press Enter".to_string();
@@ -661,7 +693,6 @@ impl App {
         self.active_tab  = tab.clone();
         self.results.clear();
         self.selected    = None;
-        self.cover_image = None;
         self.cover_protocol = None;
         self.episode_list.clear();
         self.search_input.clear();
@@ -687,7 +718,6 @@ impl App {
         if page == 1 {
             self.results.clear();
             self.selected    = None;
-            self.cover_image = None;
             self.status = format!("Searching \"{query}\"…");
         } else {
             self.status = format!("Loading page {page}…");
@@ -727,16 +757,25 @@ impl App {
 
         // ── Cover image ───────────────────────────────────────────────────────
         self.cover_protocol = None;
-        self.cover_image    = None;
 
-        if let Some(url) = item.cover_url().map(String::from) {
-            if let Some(cached) = self.image_cache.get(&url).cloned() {
-                // Cache hit — render immediately, no network call
-                self.render_cover(cached);
-            } else {
-                // Cache miss — fetch and store
+        // Fast path: decoded pixels already available — build protocol immediately, no decode, no blank frame
+        if self.rgba_cache.contains_key(&item_id) {
+            self.build_cover_protocol(&item_id);
+        } else if let Some(url) = item.cover_url().map(String::from) {
+            if let Some(cached_bytes) = self.image_cache.get(&url).cloned() {
+                // Byte cache hit — bytes available, but need to decode (off main thread)
                 let tx = self.msg_tx.clone();
-                let url_clone = url.clone();
+                let id = item_id.clone();
+                tokio::spawn(async move {
+                    if let Ok(img) = image::load_from_memory(&cached_bytes) {
+                        let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
+                        let _ = tx.send(AppMsg::ImageDecoded { id, image: dyn_img });
+                    }
+                });
+            } else {
+                // Full cache miss — fetch, then decode
+                let tx = self.msg_tx.clone();
+                let id = item_id.clone();
                 tokio::spawn(async move {
                     let client = reqwest::Client::builder()
                         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
@@ -744,14 +783,21 @@ impl App {
                         .connect_timeout(Duration::from_secs(8))
                         .build().unwrap_or_default();
                     for attempt in 0..2u8 {
-                        match client.get(&url_clone).header("Accept", "image/*").send().await {
+                        match client.get(&url).header("Accept", "image/*").send().await {
                             Ok(r) if r.status().is_success() => {
                                 match r.bytes().await {
                                     Ok(b) => {
+                                        let bytes = b.to_vec();
                                         let _ = tx.send(AppMsg::ImageFetched {
-                                            url: url_clone,
-                                            bytes: b.to_vec(),
+                                            url: url.clone(),
+                                            item_id: id.clone(),
+                                            bytes: bytes.clone(),
                                         });
+                                        // Also decode immediately for this item
+                                        if let Ok(img) = image::load_from_memory(&bytes) {
+                                            let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
+                                            let _ = tx.send(AppMsg::ImageDecoded { id, image: dyn_img });
+                                        }
                                         return;
                                     }
                                     Err(_) if attempt == 0 => continue,
@@ -922,13 +968,11 @@ impl App {
     }
 
     pub fn on_resize(&mut self) {
-        // Don't re-query stdio — we're already in raw mode.
-        // Just re-create the cover protocol so it re-renders at the new size.
-        if let Some(bytes) = self.cover_image.clone() {
-            if let Ok(img) = image::load_from_memory(&bytes) {
-                let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
-                self.cover_protocol = Some(self.image_picker.new_resize_protocol(dyn_img));
-            }
+        // Rebuild the cover protocol at the new terminal size.
+        // rgba_cache already has decoded pixels — just recreate the protocol, no re-decode.
+        if let Some(id) = self.selected.as_ref().map(|s| s.id().to_string()) {
+            self.cover_protocol = None;
+            self.build_cover_protocol(&id);
         }
     }
 }
