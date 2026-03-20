@@ -116,23 +116,26 @@ if (-not $HAS_SCOOP) {
     Write-Ok "Scoop installed"
 }
 
-# ── Kitty ─────────────────────────────────────────────────────────────────────
+# ── WezTerm ───────────────────────────────────────────────────────────────────
+# WezTerm is used instead of Kitty because Kitty has no native Windows support.
+# WezTerm supports the Kitty graphics protocol natively on Windows, giving
+# the same image quality.
 
-if (-not (Get-Command kitty -ErrorAction SilentlyContinue)) {
-    Write-Step "Installing Kitty terminal..."
-    $kittyInstalled = $false
+if (-not (Get-Command wezterm -ErrorAction SilentlyContinue)) {
+    Write-Step "Installing WezTerm terminal..."
+    $weztermInstalled = $false
     if ($HAS_WINGET) {
-        winget install --id kovidgoyal.kitty -e --silent
+        winget install --id wez.wezterm -e --silent
         Update-SessionPath
-        $kittyInstalled = [bool](Get-Command kitty -ErrorAction SilentlyContinue)
+        $weztermInstalled = [bool](Get-Command wezterm -ErrorAction SilentlyContinue)
     }
-    if (-not $kittyInstalled) {
+    if (-not $weztermInstalled) {
         scoop bucket add extras
-        scoop install kitty
+        scoop install wezterm
     }
-    Write-Ok "Kitty installed"
+    Write-Ok "WezTerm installed"
 } else {
-    Write-Ok "Kitty already installed"
+    Write-Ok "WezTerm already installed"
 }
 
 # ── mpv ───────────────────────────────────────────────────────────────────────
@@ -195,23 +198,23 @@ if ($CURRENT_PATH -notlike "*$INSTALL_DIR*") {
     Write-Ok "Added $INSTALL_DIR to PATH"
 }
 
-# ── Desktop shortcut (opens in Kitty) ────────────────────────────────────────
+# ── Desktop shortcut (opens in WezTerm) ──────────────────────────────────────
 
-$kittyCmd   = Get-Command kitty -ErrorAction SilentlyContinue
-$KITTY_PATH = if ($kittyCmd) { $kittyCmd.Source } else { $null }
+$weztermCmd  = Get-Command wezterm -ErrorAction SilentlyContinue
+$WEZTERM_PATH = if ($weztermCmd) { $weztermCmd.Source } else { $null }
 
-if ($KITTY_PATH) {
+if ($WEZTERM_PATH) {
     $SHORTCUT_PATH = "$env:USERPROFILE\Desktop\nexus-tui.lnk"
     $WSH = New-Object -ComObject WScript.Shell
     $SC  = $WSH.CreateShortcut($SHORTCUT_PATH)
-    $SC.TargetPath       = $KITTY_PATH
-    $SC.Arguments        = "--title nexus-tui -- nexus"
+    $SC.TargetPath       = $WEZTERM_PATH
+    $SC.Arguments        = "start -- nexus"
     $SC.WorkingDirectory = $env:USERPROFILE
     $SC.Description      = "nexus-tui — Anime/Movies/TV/Manga browser"
     $SC.Save()
-    Write-Ok "Desktop shortcut created (opens in Kitty)"
+    Write-Ok "Desktop shortcut created (opens in WezTerm)"
 }
 
 Write-Host ""
-Write-Host "  ◆ Done! Type 'nexus' in Kitty to launch." -ForegroundColor Yellow
+Write-Host "  ◆ Done! Double-click the desktop shortcut or type 'nexus' in WezTerm." -ForegroundColor Yellow
 Write-Host ""

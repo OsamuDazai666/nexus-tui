@@ -34,16 +34,18 @@ async fn main() -> Result<()> {
     let mut image_picker = ratatui_image::picker::Picker::from_query_stdio()
         .unwrap_or_else(|_| ratatui_image::picker::Picker::from_fontsize((8, 16)));
 
-    // The library's iterm2_from_env() maps "vscode" → Iterm2, but VS Code's
-    // terminal (xterm.js) actually supports Sixel, not iTerm2 inline images
-    // (OSC 1337). Override to Sixel for VS Code so we get proper rendering.
     let term_prog = std::env::var("TERM_PROGRAM").unwrap_or_default();
-    if term_prog.contains("vscode") {
+
+    // WezTerm fully supports the Kitty graphics protocol on all platforms
+    // including Windows — force it to Kitty for best image quality.
+    if term_prog.contains("WezTerm") {
+        image_picker.set_protocol_type(ratatui_image::picker::ProtocolType::Kitty);
+    } else if term_prog.contains("vscode") {
+        // VS Code's terminal (xterm.js) supports Sixel, not iTerm2 (OSC 1337)
         image_picker.set_protocol_type(ratatui_image::picker::ProtocolType::Sixel);
     } else if image_picker.protocol_type() == ratatui_image::picker::ProtocolType::Halfblocks {
-        // Safety net for other terminals: override Halfblocks → Iterm2 where supported.
+        // Safety net: upgrade Halfblocks → Iterm2 for terminals that support it
         if term_prog.contains("iTerm")
-            || term_prog.contains("WezTerm")
             || term_prog.contains("mintty")
             || term_prog.contains("Tabby")
             || term_prog.contains("Hyper")
