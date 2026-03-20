@@ -20,15 +20,23 @@ async fn main() -> Result<()> {
     // Write sample config if first run
     let _ = config::Config::write_sample();
 
-    // Create image picker BEFORE entering raw mode so the stdio query works correctly.
-    // The picker probes the terminal for graphics protocol support (Kitty/Sixel/iTerm2)
-    // by writing escape sequences to stdout and reading responses from stdin.
+    // Enable raw mode BEFORE the stdio query so Windows' console echo is
+    // suppressed. On Linux/macOS order doesn't matter, but on Windows the
+    // picker query writes escape sequences to stdout and reads responses from
+    // stdin — if echo is still on, those bytes bleed back as keystrokes after
+    // startup, causing every key to register twice.
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+
+    // Probe terminal for graphics protocol support (Kitty/Sixel/iTerm2).
+    // Must happen before EnterAlternateScreen so the query/response round-trip
+    // goes to the main screen buffer, not the alternate screen.
     let mut image_picker = ratatui_image::picker::Picker::from_query_stdio()
         .unwrap_or_else(|_| ratatui_image::picker::Picker::from_fontsize((8, 16)));
 
-    // The library's iterm2_from_env() maps "vscode" → Iterm2, but VS Code's terminal
-    // (xterm.js) actually supports Sixel, not iTerm2 inline images (OSC 1337).
-    // Override to Sixel for VS Code so we get proper image rendering.
+    // The library's iterm2_from_env() maps "vscode" → Iterm2, but VS Code's
+    // terminal (xterm.js) actually supports Sixel, not iTerm2 inline images
+    // (OSC 1337). Override to Sixel for VS Code so we get proper rendering.
     let term_prog = std::env::var("TERM_PROGRAM").unwrap_or_default();
     if term_prog.contains("vscode") {
         image_picker.set_protocol_type(ratatui_image::picker::ProtocolType::Sixel);
@@ -45,9 +53,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Terminal setup
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
+    // Enter alternate screen and set up terminal
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
