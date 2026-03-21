@@ -317,6 +317,15 @@ impl HistoryStore {
     }
 
     /// Update just the playback position and duration — called from the IPC poller.
+    pub fn mark_fully_watched(&self, anime_id: &str, episode_number: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE episodes SET fully_watched = 1, watched = 1 WHERE anime_id = ?1 AND episode_number = ?2",
+            params![anime_id, episode_number],
+        )?;
+        Ok(())
+    }
+
     pub fn update_position(
         &self,
         anime_id: &str,

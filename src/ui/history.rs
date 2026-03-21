@@ -1,6 +1,9 @@
 use crate::app::{App, Focus};
 use crate::ui::{focused_block, trunc, C_ACCENT, C_BG, C_BG3,
-                C_BORDER_F, C_DIM, C_GREEN, C_PANEL, C_TEXT, C_BORDER};
+                C_BORDER_F, C_DIM, C_PANEL, C_TEXT, C_BORDER};
+
+// Teal — complements the yellow accent for watched/complete state
+const C_WATCHED: Color = Color::Rgb(0, 200, 150);
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -241,7 +244,7 @@ fn draw_card_text(
     let mut meta_spans = vec![Span::styled(date_str, Style::default().fg(C_DIM))];
     if !prog_str.is_empty() {
         meta_spans.push(Span::styled("  ", Style::default()));
-        meta_spans.push(Span::styled(prog_str, Style::default().fg(C_GREEN)));
+        meta_spans.push(Span::styled(prog_str, Style::default().fg(C_WATCHED)));
     }
     if !play_str.is_empty() {
         meta_spans.push(Span::styled("  ", Style::default()));
@@ -383,11 +386,11 @@ fn draw_detail_meta(
     match (entry.progress, entry.total) {
         (Some(p), Some(t)) => lines.push(Line::from(vec![
             Span::styled("  PROG    ", Style::default().fg(C_DIM)),
-            Span::styled(format!("Ep {p} / {t}"), Style::default().fg(C_GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("Ep {p} / {t}"), Style::default().fg(C_WATCHED).add_modifier(Modifier::BOLD)),
         ])),
         (Some(p), None) => lines.push(Line::from(vec![
             Span::styled("  PROG    ", Style::default().fg(C_DIM)),
-            Span::styled(format!("Ep {p}"), Style::default().fg(C_GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("Ep {p}"), Style::default().fg(C_WATCHED).add_modifier(Modifier::BOLD)),
         ])),
         _ => {}
     }
@@ -576,7 +579,7 @@ fn draw_episode_list(
 
         // ── Label line ────────────────────────────────────────────────────────
         let (icon, icon_color) = match rec {
-            Some(r) if r.fully_watched          => ("✓", C_GREEN),
+            Some(r) if r.fully_watched          => ("✓", C_WATCHED),
             Some(r) if r.position_seconds > 5.0 => ("▶", C_ACCENT),
             _                                    => ("·", C_DIM),
         };
@@ -625,20 +628,19 @@ fn draw_episode_list(
         if bar_y >= inner.y + inner.height { continue; }
 
         let bar_color = if rec.map(|r| r.fully_watched).unwrap_or(false) {
-            C_GREEN
+            C_WATCHED
         } else {
             C_ACCENT
         };
 
-        // Compute pct: ratio if we have duration, positional indicator if not
+        // Compute pct: exact ratio if we have duration, estimate if not
         let pct = rec.and_then(|r| {
             if r.fully_watched {
-                Some(1.0f64)
+                Some(1.0f64)   // always show full bar for watched episodes
             } else if r.duration_seconds > 0.0 && r.position_seconds > 0.0 {
                 Some((r.position_seconds / r.duration_seconds).clamp(0.0, 1.0))
             } else if r.position_seconds > 0.0 {
-                // No duration stored yet — show bar using 24min typical episode as denominator
-                // Capped at 0.95 so it never looks "done"
+                // No duration yet — estimate using 24min typical episode, cap at 0.95
                 Some((r.position_seconds / 1440.0).clamp(0.0, 0.95))
             } else {
                 None

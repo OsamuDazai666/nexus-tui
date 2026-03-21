@@ -134,18 +134,27 @@ pub fn launch_mpv_tracked(
 
     // ── Wait for mpv ──────────────────────────────────────────────────────────
     let _ = child.wait();
+
+    // Final IPC read BEFORE stopping observer — captures position on natural end
+    // (when mpv ends naturally it doesn't write a watch_later file)
+    let ipc_final = ipc_get_position_once(&socket).ok();
+
     let _ = stop_tx.send(());
     let _ = observer.join();
 
-    // ── Authoritative quit position: watch_later file (exact) ─────────────────
-    // Duration: from the observer stream (watch_later doesn't store it)
-    let (quit_pos, _) = read_watch_later(&watch_dir).unwrap_or((0.0, 0.0));
+    // ── Authoritative quit position ────────────────────────────────────────────
+    // Priority: watch_later (q/close, exact) > final IPC read > observer last known
+    let (wl_pos, _)        = read_watch_later(&watch_dir).unwrap_or((0.0, 0.0));
     let (obs_pos, obs_dur) = *last_known.lock().unwrap();
+    let (ipc_pos, ipc_dur) = ipc_final.unwrap_or((0.0, 0.0));
 
-    // Use watch_later position as authoritative (exact to ms),
-    // observer duration as the best duration source
-    let final_pos = if quit_pos > 0.0 { quit_pos } else { obs_pos };
-    let final_dur = obs_dur;
+    let final_pos = if wl_pos  > 0.0 { wl_pos  }
+                    else if ipc_pos > 0.0 { ipc_pos }
+                    else                  { obs_pos };
+
+    let final_dur = if ipc_dur > 0.0 { ipc_dur }
+                    else if obs_dur > 0.0 { obs_dur }
+                    else { 0.0 };
 
     // Clean up
     let _ = std::fs::remove_dir_all(&watch_dir);
@@ -196,6 +205,38 @@ fn read_watch_later(dir: &str) -> Result<(f64, f64)> {
 /// Connects to the IPC socket, subscribes to time-pos and duration changes,
 /// and reads the event stream until the socket closes or stop is signalled.
 /// Sends Position events to the app. Checkpoints to DB every 30 seconds.
+/// One-shot IPC query — returns (time-pos, duration) from mpv socket.
+fn ipc_get_position_once(socket: &str) -> Result<(f64, f64)> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixStream;
+
+    let mut stream = UnixStream::connect(socket)
+        .map_err(|e| anyhow!("IPC connect: {e}"))?;
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(2)))?;
+
+    let subscribe = concat!(
+        "{\"command\":[\"get_property\",\"time-pos\"]}\n",
+        "{\"command\":[\"get_property\",\"duration\"]}\n",
+    );
+    stream.write_all(subscribe.as_bytes())?;
+
+    let mut reader = BufReader::new(stream);
+    let mut pos = 0.0f64;
+    let mut dur = 0.0f64;
+
+    for _ in 0..2 {
+        let mut line = String::new();
+        if reader.read_line(&mut line).is_ok() {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+                let val = v["data"].as_f64().unwrap_or(0.0);
+                if pos == 0.0 { pos = val; } else { dur = val; }
+            }
+        }
+    }
+
+    Ok((pos, dur))
+}
+
 fn observe_stream(
     socket:     &str,
     anime_id:   &str,

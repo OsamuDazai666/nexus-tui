@@ -120,9 +120,16 @@ async fn run<B: ratatui::backend::Backend>(
 
             // Save authoritative quit position
             if !anime_id.is_empty() && !episode.is_empty() {
-                let _ = db.update_position(&anime_id, &episode, pos, dur);
+                // If no watch_later file was written (natural end), force fully_watched
+                // when position covers 80%+ of duration
+                let effective_pos = if dur > 0.0 && pos > 0.0 && pos / dur >= 0.80 {
+                    dur  // treat as fully watched — store position = duration
+                } else {
+                    pos
+                };
+                let _ = db.update_position(&anime_id, &episode, effective_pos, dur);
                 let _ = tx.send(AppMsg::Playback(player::PlaybackEvent::Finished {
-                    anime_id, episode, position: pos, duration: dur,
+                    anime_id, episode, position: effective_pos, duration: dur,
                 }));
             }
 
