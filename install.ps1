@@ -5,6 +5,16 @@
 $ErrorActionPreference = "Stop"
 $ProgressPreference    = "SilentlyContinue"  # speeds up Invoke-WebRequest
 
+trap {
+    Write-Host ""
+    Write-Host "    " -NoNewline
+    Write-Host "✗ " -ForegroundColor Red -NoNewline
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ""
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+
 $INSTALL_DIR = Join-Path $env:APPDATA "nexus-tui"
 $BIN_DIR     = Join-Path $env:LOCALAPPDATA "Programs\nexus-tui"
 $REPO_URL    = "https://github.com/OsamuDazai666/nexus-tui.git"
@@ -38,6 +48,8 @@ function Write-Fail($msg) {
     Write-Host "    " -NoNewline
     Write-Host "✗ " -ForegroundColor Red -NoNewline
     Write-Host $msg -ForegroundColor Red
+    Write-Host ""
+    Read-Host "Press Enter to exit"
     exit 1
 }
 
@@ -115,6 +127,7 @@ if (Test-Path (Join-Path $INSTALL_DIR ".git")) {
         Write-Host "nexus" -ForegroundColor Cyan -NoNewline
         Write-Host " to launch." -ForegroundColor Gray
         Write-Host ""
+        Read-Host "Press Enter to exit"
         exit 0
     }
 
@@ -132,13 +145,17 @@ if (Test-Path (Join-Path $INSTALL_DIR ".git")) {
         Write-Host "  Skipped. Run " -ForegroundColor DarkGray -NoNewline
         Write-Host "nexus" -ForegroundColor Cyan -NoNewline
         Write-Host " to launch." -ForegroundColor DarkGray
-        Write-Host ""; exit 0
+        Write-Host ""
+        Read-Host "Press Enter to exit"
+        exit 0
     }
 } else {
     Write-Info "Install directory: $INSTALL_DIR"
     Write-Host ""
     if (-not (Ask-YesNo "Install nexus-tui?")) {
-        Write-Host ""; Write-Host "  Cancelled." -ForegroundColor DarkGray; Write-Host ""; exit 0
+        Write-Host ""; Write-Host "  Cancelled." -ForegroundColor DarkGray; Write-Host ""
+        Read-Host "Press Enter to exit"
+        exit 0
     }
 }
 
@@ -257,3 +274,4 @@ Write-Host "Done!  Run " -ForegroundColor White -NoNewline
 Write-Host "nexus" -ForegroundColor Cyan -NoNewline
 Write-Host " to launch" -ForegroundColor White
 Write-Host ""
+Read-Host "Press Enter to exit"

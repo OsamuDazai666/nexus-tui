@@ -5,10 +5,11 @@ use anyhow::{anyhow, bail, Result};
 use std::process::Command;
 use tokio::sync::mpsc;
 
-const ALLANIME_API:  &str = "https://api.allanime.day/api";
+const ALLANIME_API: &str = "https://api.allanime.day/api";
 const ALLANIME_BASE: &str = "allanime.day";
 const ALLANIME_REFR: &str = "https://allmanga.to";
-const AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0";
+const AGENT: &str =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0";
 
 // ── Public event type ─────────────────────────────────────────────────────────
 
@@ -16,41 +17,132 @@ const AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/2
 pub enum PlaybackEvent {
     /// Live position update from observe_property stream (~1s granularity).
     /// `checkpoint=true` means write to DB now (every 30s).
-    Position { anime_id: String, episode: String, position: f64, duration: f64, checkpoint: bool },
+    Position {
+        anime_id: String,
+        episode: String,
+        position: f64,
+        duration: f64,
+        checkpoint: bool,
+    },
     /// mpv exited — position is the authoritative value read from watch_later file.
-    Finished { anime_id: String, episode: String, position: f64, duration: f64 },
+    Finished {
+        anime_id: String,
+        episode: String,
+        position: f64,
+        duration: f64,
+    },
 }
 
 // ── ani-cli hex cipher ────────────────────────────────────────────────────────
 
 fn hex_decipher(s: &str) -> String {
-    let pairs: Vec<&str> = (0..s.len()).step_by(2)
-        .map(|i| &s[i..=(i+1).min(s.len()-1)])
+    let pairs: Vec<&str> = (0..s.len())
+        .step_by(2)
+        .map(|i| &s[i..=(i + 1).min(s.len() - 1)])
         .filter(|p| p.len() == 2)
         .collect();
 
-    pairs.iter().map(|hex| match *hex {
-        "79"=>"A","7a"=>"B","7b"=>"C","7c"=>"D","7d"=>"E","7e"=>"F","7f"=>"G",
-        "70"=>"H","71"=>"I","72"=>"J","73"=>"K","74"=>"L","75"=>"M","76"=>"N","77"=>"O",
-        "68"=>"P","69"=>"Q","6a"=>"R","6b"=>"S","6c"=>"T","6d"=>"U","6e"=>"V","6f"=>"W",
-        "60"=>"X","61"=>"Y","62"=>"Z",
-        "59"=>"a","5a"=>"b","5b"=>"c","5c"=>"d","5d"=>"e","5e"=>"f","5f"=>"g",
-        "50"=>"h","51"=>"i","52"=>"j","53"=>"k","54"=>"l","55"=>"m","56"=>"n","57"=>"o",
-        "48"=>"p","49"=>"q","4a"=>"r","4b"=>"s","4c"=>"t","4d"=>"u","4e"=>"v","4f"=>"w",
-        "40"=>"x","41"=>"y","42"=>"z",
-        "08"=>"0","09"=>"1","0a"=>"2","0b"=>"3","0c"=>"4","0d"=>"5","0e"=>"6","0f"=>"7",
-        "00"=>"8","01"=>"9",
-        "15"=>"-","16"=>".","67"=>"_","46"=>"~","02"=>":","17"=>"/","07"=>"?",
-        "1b"=>"#","63"=>"[","65"=>"]","78"=>"@","19"=>"!","1c"=>"$","1e"=>"&",
-        "10"=>"(","11"=>")","12"=>"*","13"=>"+","14"=>",","03"=>";","05"=>"=","1d"=>"%",
-        _ => "",
-    }).collect::<String>()
-    .replace("/clock", "/clock.json")
+    pairs
+        .iter()
+        .map(|hex| match *hex {
+            "79" => "A",
+            "7a" => "B",
+            "7b" => "C",
+            "7c" => "D",
+            "7d" => "E",
+            "7e" => "F",
+            "7f" => "G",
+            "70" => "H",
+            "71" => "I",
+            "72" => "J",
+            "73" => "K",
+            "74" => "L",
+            "75" => "M",
+            "76" => "N",
+            "77" => "O",
+            "68" => "P",
+            "69" => "Q",
+            "6a" => "R",
+            "6b" => "S",
+            "6c" => "T",
+            "6d" => "U",
+            "6e" => "V",
+            "6f" => "W",
+            "60" => "X",
+            "61" => "Y",
+            "62" => "Z",
+            "59" => "a",
+            "5a" => "b",
+            "5b" => "c",
+            "5c" => "d",
+            "5d" => "e",
+            "5e" => "f",
+            "5f" => "g",
+            "50" => "h",
+            "51" => "i",
+            "52" => "j",
+            "53" => "k",
+            "54" => "l",
+            "55" => "m",
+            "56" => "n",
+            "57" => "o",
+            "48" => "p",
+            "49" => "q",
+            "4a" => "r",
+            "4b" => "s",
+            "4c" => "t",
+            "4d" => "u",
+            "4e" => "v",
+            "4f" => "w",
+            "40" => "x",
+            "41" => "y",
+            "42" => "z",
+            "08" => "0",
+            "09" => "1",
+            "0a" => "2",
+            "0b" => "3",
+            "0c" => "4",
+            "0d" => "5",
+            "0e" => "6",
+            "0f" => "7",
+            "00" => "8",
+            "01" => "9",
+            "15" => "-",
+            "16" => ".",
+            "67" => "_",
+            "46" => "~",
+            "02" => ":",
+            "17" => "/",
+            "07" => "?",
+            "1b" => "#",
+            "63" => "[",
+            "65" => "]",
+            "78" => "@",
+            "19" => "!",
+            "1c" => "$",
+            "1e" => "&",
+            "10" => "(",
+            "11" => ")",
+            "12" => "*",
+            "13" => "+",
+            "14" => ",",
+            "03" => ";",
+            "05" => "=",
+            "1d" => "%",
+            _ => "",
+        })
+        .collect::<String>()
+        .replace("/clock", "/clock.json")
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-pub async fn stream_anime(show_id: &str, episode: u32, mode: &str, quality: &str) -> Result<String> {
+pub async fn stream_anime(
+    show_id: &str,
+    episode: u32,
+    mode: &str,
+    quality: &str,
+) -> Result<String> {
     let (url, _) = get_episode_url(show_id, episode, mode, quality).await?;
     Ok(url)
 }
@@ -71,25 +163,30 @@ pub fn launch_mpv_url(url: &str) -> Result<()> {
 /// The caller (main loop) is responsible for terminal teardown before calling
 /// this and restore afterwards. Returns `(quit_position_seconds, duration_seconds)`.
 pub fn launch_mpv_tracked(
-    url:          &str,
-    anime_id:     &str,
-    episode:      &str,
-    resume_from:  f64,
-    tx:           Option<mpsc::UnboundedSender<PlaybackEvent>>,
-    skip_times:   Option<crate::api::allanime::SkipTimes>,
+    url: &str,
+    anime_id: &str,
+    episode: &str,
+    resume_from: f64,
+    tx: Option<mpsc::UnboundedSender<PlaybackEvent>>,
+    skip_times: Option<crate::api::allanime::SkipTimes>,
     skip_setting: &str,
 ) -> Result<(f64, f64)> {
-    let url = url.replace("https://https://", "https://")
-                 .replace("http://http://", "http://");
+    let url = url
+        .replace("https://https://", "https://")
+        .replace("http://http://", "http://");
 
-    let needs_referer = url.contains("fast4speed") || url.contains("clock.json")
-        || url.contains(".m3u8");
+    let needs_referer =
+        url.contains("fast4speed") || url.contains("clock.json") || url.contains(".m3u8");
 
     // Platform-specific paths
     #[cfg(unix)]
     let watch_dir = format!("/tmp/nexus-watch-{}", std::process::id());
     #[cfg(windows)]
-    let watch_dir = format!("{}\\nexus-watch-{}", std::env::var("TEMP").unwrap_or_else(|_| "C:\\Temp".into()), std::process::id());
+    let watch_dir = format!(
+        "{}\\nexus-watch-{}",
+        std::env::var("TEMP").unwrap_or_else(|_| "C:\\Temp".into()),
+        std::process::id()
+    );
     let _ = std::fs::create_dir_all(&watch_dir);
 
     // IPC socket/pipe path
@@ -104,7 +201,7 @@ pub fn launch_mpv_tracked(
     // Position tracking
     cmd.arg("--save-position-on-quit");
     cmd.arg(format!("--watch-later-dir={watch_dir}"));
-    cmd.arg("--watch-later-options=start");   // only save start position, not other state
+    cmd.arg("--watch-later-options=start"); // only save start position, not other state
 
     // IPC for live observe_property stream
     cmd.arg(format!("--input-ipc-server={socket}"));
@@ -113,7 +210,9 @@ pub fn launch_mpv_tracked(
     // HTTP headers
     cmd.arg(format!("--http-header-fields-append=User-Agent: {AGENT}"));
     if needs_referer {
-        cmd.arg(format!("--http-header-fields-append=Referer: {ALLANIME_REFR}"));
+        cmd.arg(format!(
+            "--http-header-fields-append=Referer: {ALLANIME_REFR}"
+        ));
     }
 
     // Resume from saved position
@@ -130,8 +229,14 @@ pub fn launch_mpv_tracked(
         let skip_outro = matches!(skip_setting, "outro" | "both");
 
         crate::api::allanime::skip_log(&format!("[nexus-skip] skip_setting={skip_setting} skip_intro={skip_intro} skip_outro={skip_outro}"));
-        crate::api::allanime::skip_log(&format!("[nexus-skip] intro={:?}", st.intro.as_ref().map(|i| (i.start, i.end))));
-        crate::api::allanime::skip_log(&format!("[nexus-skip] outro={:?}", st.outro.as_ref().map(|o| (o.start, o.end))));
+        crate::api::allanime::skip_log(&format!(
+            "[nexus-skip] intro={:?}",
+            st.intro.as_ref().map(|i| (i.start, i.end))
+        ));
+        crate::api::allanime::skip_log(&format!(
+            "[nexus-skip] outro={:?}",
+            st.outro.as_ref().map(|o| (o.start, o.end))
+        ));
 
         let lua_path = ensure_skip_lua_installed();
         crate::api::allanime::skip_log(&format!("[nexus-skip] lua_path={:?}", lua_path));
@@ -140,42 +245,49 @@ pub fn launch_mpv_tracked(
         if skip_intro {
             if let Some(ref i) = st.intro {
                 opts_parts.push(format!("nexus_skip-op_start={:.3}", i.start));
-                opts_parts.push(format!("nexus_skip-op_end={:.3}",   i.end));
+                opts_parts.push(format!("nexus_skip-op_end={:.3}", i.end));
             }
         }
         if skip_outro {
             if let Some(ref o) = st.outro {
                 opts_parts.push(format!("nexus_skip-ed_start={:.3}", o.start));
-                opts_parts.push(format!("nexus_skip-ed_end={:.3}",   o.end));
+                opts_parts.push(format!("nexus_skip-ed_end={:.3}", o.end));
             }
         }
         if !opts_parts.is_empty() {
             let script_opts = opts_parts.join(",");
-            crate::api::allanime::skip_log("[nexus-skip] --script-opts={script_opts}");
+            crate::api::allanime::skip_log(&format!("[nexus-skip] --script-opts={script_opts}"));
             if let Some(ref path) = lua_path {
-                crate::api::allanime::skip_log(&format!("[nexus-skip] --script={}", path.display()));
+                crate::api::allanime::skip_log(&format!(
+                    "[nexus-skip] --script={}",
+                    path.display()
+                ));
                 cmd.arg(format!("--script={}", path.display()));
             }
             cmd.arg(format!("--script-opts={script_opts}"));
         } else {
-            crate::api::allanime::skip_log("[nexus-skip] no opts_parts built — check skip_intro/outro flags and interval data");
+            crate::api::allanime::skip_log(
+                "[nexus-skip] no opts_parts built — check skip_intro/outro flags and interval data",
+            );
         }
     } else {
-        crate::api::allanime::skip_log(&format!("[nexus-skip] skip_times=None — skip_setting={skip_setting}, no timestamps available"));
+        crate::api::allanime::skip_log(&format!(
+            "[nexus-skip] skip_times=None — skip_setting={skip_setting}, no timestamps available"
+        ));
     }
 
-    let mut child = cmd.spawn().map_err(|e| anyhow!(
-        "Failed to launch mpv: {e}\nInstall: sudo apt install mpv"
-    ))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| anyhow!("Failed to launch mpv: {e}\nInstall: sudo apt install mpv"))?;
 
     // ── observe_property stream thread ────────────────────────────────────────
-    let socket2      = socket.clone();
-    let anime_id2    = anime_id.to_string();
-    let episode2     = episode.to_string();
-    let tx2          = tx.clone();
+    let socket2 = socket.clone();
+    let anime_id2 = anime_id.to_string();
+    let episode2 = episode.to_string();
+    let tx2 = tx.clone();
     let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
 
-    let last_known  = std::sync::Arc::new(std::sync::Mutex::new((0.0f64, 0.0f64)));
+    let last_known = std::sync::Arc::new(std::sync::Mutex::new((0.0f64, 0.0f64)));
     let last_known2 = last_known.clone();
 
     let observer = std::thread::spawn(move || {
@@ -194,17 +306,25 @@ pub fn launch_mpv_tracked(
 
     // ── Authoritative quit position ────────────────────────────────────────────
     // Priority: watch_later (q/close, exact) > final IPC read > observer last known
-    let (wl_pos, _)        = read_watch_later(&watch_dir).unwrap_or((0.0, 0.0));
+    let (wl_pos, _) = read_watch_later(&watch_dir).unwrap_or((0.0, 0.0));
     let (obs_pos, obs_dur) = *last_known.lock().unwrap();
     let (ipc_pos, ipc_dur) = ipc_final.unwrap_or((0.0, 0.0));
 
-    let final_pos = if wl_pos  > 0.0 { wl_pos  }
-                    else if ipc_pos > 0.0 { ipc_pos }
-                    else                  { obs_pos };
+    let final_pos = if wl_pos > 0.0 {
+        wl_pos
+    } else if ipc_pos > 0.0 {
+        ipc_pos
+    } else {
+        obs_pos
+    };
 
-    let final_dur = if ipc_dur > 0.0 { ipc_dur }
-                    else if obs_dur > 0.0 { obs_dur }
-                    else { 0.0 };
+    let final_dur = if ipc_dur > 0.0 {
+        ipc_dur
+    } else if obs_dur > 0.0 {
+        obs_dur
+    } else {
+        0.0
+    };
 
     // Clean up
     let _ = std::fs::remove_dir_all(&watch_dir);
@@ -216,7 +336,7 @@ pub fn launch_mpv_tracked(
         if let Some(ref t) = tx {
             let _ = t.send(PlaybackEvent::Finished {
                 anime_id: anime_id.to_string(),
-                episode:  episode.to_string(),
+                episode: episode.to_string(),
                 position: final_pos,
                 duration: final_dur,
             });
@@ -243,12 +363,13 @@ fn read_watch_later(dir: &str) -> Result<(f64, f64)> {
     // Format: one key=value per line, e.g.:
     //   start=842.123000
     //   volume=100
-    let pos = content.lines()
+    let pos = content
+        .lines()
         .find(|l| l.starts_with("start="))
         .and_then(|l| l["start=".len()..].trim().parse::<f64>().ok())
         .unwrap_or(0.0);
 
-    Ok((pos, 0.0))   // watch_later doesn't store duration; we already have it in DB
+    Ok((pos, 0.0)) // watch_later doesn't store duration; we already have it in DB
 }
 
 // ── observe_property stream ───────────────────────────────────────────────────
@@ -367,8 +488,7 @@ fn ipc_get_position_once(socket: &str) -> Result<(f64, f64)> {
     #[cfg(unix)]
     {
         use std::os::unix::net::UnixStream;
-        let mut stream = UnixStream::connect(socket)
-            .map_err(|e| anyhow!("IPC connect: {e}"))?;
+        let mut stream = UnixStream::connect(socket).map_err(|e| anyhow!("IPC connect: {e}"))?;
         stream.set_read_timeout(Some(std::time::Duration::from_secs(2)))?;
         stream.write_all(subscribe.as_bytes())?;
         let mut reader = BufReader::new(stream);
@@ -378,7 +498,10 @@ fn ipc_get_position_once(socket: &str) -> Result<(f64, f64)> {
     #[cfg(windows)]
     {
         use std::fs::OpenOptions;
-        let mut f = OpenOptions::new().read(true).write(true).open(socket)
+        let mut f = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(socket)
             .map_err(|e| anyhow!("IPC pipe open: {e}"))?;
         f.write_all(subscribe.as_bytes())?;
         let mut reader = BufReader::new(f);
@@ -397,7 +520,11 @@ fn parse_two_ipc_responses(reader: &mut impl std::io::BufRead) -> Result<(f64, f
         if reader.read_line(&mut line).is_ok() {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(line.trim()) {
                 let val = v["data"].as_f64().unwrap_or(0.0);
-                if pos == 0.0 { pos = val; } else { dur = val; }
+                if pos == 0.0 {
+                    pos = val;
+                } else {
+                    dur = val;
+                }
             }
         }
     }
@@ -405,11 +532,11 @@ fn parse_two_ipc_responses(reader: &mut impl std::io::BufRead) -> Result<(f64, f
 }
 
 fn observe_stream(
-    socket:     &str,
-    anime_id:   &str,
-    episode:    &str,
-    tx:         Option<mpsc::UnboundedSender<PlaybackEvent>>,
-    stop:       std::sync::mpsc::Receiver<()>,
+    socket: &str,
+    anime_id: &str,
+    episode: &str,
+    tx: Option<mpsc::UnboundedSender<PlaybackEvent>>,
+    stop: std::sync::mpsc::Receiver<()>,
     last_known: std::sync::Arc<std::sync::Mutex<(f64, f64)>>,
 ) {
     use std::io::{BufRead, BufReader, Write};
@@ -425,7 +552,9 @@ fn observe_stream(
         use std::os::unix::net::UnixStream;
         let mut result = None;
         for _ in 0..10 {
-            if stop.try_recv().is_ok() { return; }
+            if stop.try_recv().is_ok() {
+                return;
+            }
             match UnixStream::connect(socket) {
                 Ok(s) => {
                     let _ = s.set_read_timeout(Some(std::time::Duration::from_secs(2)));
@@ -443,7 +572,9 @@ fn observe_stream(
         use std::fs::OpenOptions;
         let mut result = None;
         for _ in 0..10 {
-            if stop.try_recv().is_ok() { return; }
+            if stop.try_recv().is_ok() {
+                return;
+            }
             match OpenOptions::new().read(true).write(true).open(socket) {
                 Ok(f) => {
                     result = Some(Box::new(f) as Box<dyn ipc_rw::IpcStream>);
@@ -465,7 +596,9 @@ fn observe_stream(
         "{\"command\":[\"observe_property\",1,\"time-pos\"]}\n",
         "{\"command\":[\"observe_property\",2,\"duration\"]}\n",
     );
-    if stream.write_all(subscribe.as_bytes()).is_err() { return; }
+    if stream.write_all(subscribe.as_bytes()).is_err() {
+        return;
+    }
 
     let mut reader = BufReader::new(stream);
 
@@ -474,22 +607,32 @@ fn observe_stream(
     let mut last_checkpoint = std::time::Instant::now();
 
     loop {
-        if stop.try_recv().is_ok() { break; }
+        if stop.try_recv().is_ok() {
+            break;
+        }
 
         let mut line = String::new();
         match reader.read_line(&mut line) {
             Ok(0) => break,
             Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
-                   || e.kind() == std::io::ErrorKind::TimedOut => continue,
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                continue
+            }
             Err(_) => break,
         }
 
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(line.trim()) {
             if v["event"] == "property-change" {
                 match v["id"].as_u64() {
-                    Some(1) => { cur_pos = v["data"].as_f64().unwrap_or(cur_pos); }
-                    Some(2) => { cur_dur = v["data"].as_f64().unwrap_or(cur_dur); }
+                    Some(1) => {
+                        cur_pos = v["data"].as_f64().unwrap_or(cur_pos);
+                    }
+                    Some(2) => {
+                        cur_dur = v["data"].as_f64().unwrap_or(cur_dur);
+                    }
                     _ => {}
                 }
 
@@ -505,10 +648,10 @@ fn observe_stream(
                     if cur_pos > 0.0 {
                         let is_checkpoint = last_checkpoint.elapsed().as_secs() >= 30;
                         let _ = t.send(PlaybackEvent::Position {
-                            anime_id:   anime_id.to_string(),
-                            episode:    episode.to_string(),
-                            position:   cur_pos,
-                            duration:   cur_dur,
+                            anime_id: anime_id.to_string(),
+                            episode: episode.to_string(),
+                            position: cur_pos,
+                            duration: cur_dur,
                             checkpoint: is_checkpoint,
                         });
                         if is_checkpoint {
@@ -538,16 +681,23 @@ async fn episodes_list(show_id: &str, mode: &str) -> Result<Vec<String>> {
     let gql = r#"query ($showId: String!) { show( _id: $showId ) { _id availableEpisodesDetail }}"#;
     let vars = format!(r#"{{"showId":"{}"}}"#, show_id);
 
-    let text = client().get(ALLANIME_API.to_string())
+    let text = client()
+        .get(ALLANIME_API.to_string())
         .query(&[("variables", &vars), ("query", &gql.to_string())])
-        .send().await?.text().await?;
+        .send()
+        .await?
+        .text()
+        .await?;
 
     let json: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
-    let mut eps: Vec<String> = if let Some(arr) = json["data"]["show"]["availableEpisodesDetail"][mode].as_array() {
-        arr.iter().filter_map(|v| v.as_str().map(String::from)).collect()
-    } else {
-        vec![]
-    };
+    let mut eps: Vec<String> =
+        if let Some(arr) = json["data"]["show"]["availableEpisodesDetail"][mode].as_array() {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        } else {
+            vec![]
+        };
 
     eps.sort_by(|a, b| {
         let an: f64 = a.parse().unwrap_or(0.0);
@@ -559,20 +709,31 @@ async fn episodes_list(show_id: &str, mode: &str) -> Result<Vec<String>> {
 
 // ── get_episode_url ───────────────────────────────────────────────────────────
 
-async fn get_episode_url(id: &str, ep: u32, mode: &str, quality: &str) -> Result<(String, Option<String>)> {
+async fn get_episode_url(
+    id: &str,
+    ep: u32,
+    mode: &str,
+    quality: &str,
+) -> Result<(String, Option<String>)> {
     let gql = r#"query ($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) { episode( showId: $showId translationType: $translationType episodeString: $episodeString ) { episodeString sourceUrls }}"#;
     let vars = format!(
         r#"{{"showId":"{}","translationType":"{}","episodeString":"{}"}}"#,
         id, mode, ep
     );
 
-    let text = client().get(ALLANIME_API.to_string())
+    let text = client()
+        .get(ALLANIME_API.to_string())
         .query(&[("variables", &vars), ("query", &gql.to_string())])
-        .send().await?.text().await?;
+        .send()
+        .await?
+        .text()
+        .await?;
 
     let normalized = text
-        .replace('{', "\n").replace('}', "\n")
-        .replace("\\u002F", "/").replace('\\', "");
+        .replace('{', "\n")
+        .replace('}', "\n")
+        .replace("\\u002F", "/")
+        .replace('\\', "");
 
     let mut providers: Vec<(String, String)> = Vec::new();
     for line in normalized.lines() {
@@ -594,14 +755,19 @@ async fn get_episode_url(id: &str, ep: u32, mode: &str, quality: &str) -> Result
 
     for (_name, encoded) in &providers {
         let path = hex_decipher(encoded);
-        if path.is_empty() { continue; }
+        if path.is_empty() {
+            continue;
+        }
         let c = client.clone();
         set.spawn(async move { get_links(&c, &path).await });
     }
 
     while let Some(res) = set.join_next().await {
         if let Ok(Ok(links)) = res {
-            if !links.is_empty() { all_links.extend(links); break; }
+            if !links.is_empty() {
+                all_links.extend(links);
+                break;
+            }
         }
     }
 
@@ -609,7 +775,11 @@ async fn get_episode_url(id: &str, ep: u32, mode: &str, quality: &str) -> Result
         bail!(
             "No playable links found for episode {ep}.\nProviders tried: {}\n\
              Install ani-cli for best compatibility:\nsudo apt install ani-cli",
-            providers.iter().map(|(n,_)| n.as_str()).collect::<Vec<_>>().join(", ")
+            providers
+                .iter()
+                .map(|(n, _)| n.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         );
     }
 
@@ -620,10 +790,12 @@ async fn get_episode_url(id: &str, ep: u32, mode: &str, quality: &str) -> Result
     });
 
     let selected = match quality {
-        "best"  => all_links.first(),
+        "best" => all_links.first(),
         "worst" => all_links.last(),
-        q => all_links.iter().find(|(res, _, _)| res.contains(q))
-                 .or_else(|| all_links.first()),
+        q => all_links
+            .iter()
+            .find(|(res, _, _)| res.contains(q))
+            .or_else(|| all_links.first()),
     };
 
     let (_, url, refr) = selected.ok_or_else(|| anyhow!("No link selected"))?;
@@ -679,15 +851,24 @@ async fn get_links(
         }
     }
 
-    let master_link = links.iter().find(|(_, u, _)| u.contains("master.m3u8")).cloned();
+    let master_link = links
+        .iter()
+        .find(|(_, u, _)| u.contains("master.m3u8"))
+        .cloned();
     if let Some((_, master_url, _)) = master_link {
         if let Ok(m3u8_links) = parse_master_m3u8(client, &master_url, m3u8_refr.as_deref()).await {
-            if !m3u8_links.is_empty() { links = m3u8_links; }
+            if !m3u8_links.is_empty() {
+                links = m3u8_links;
+            }
         }
     }
 
     if url.contains("tools.fast4speed.rsvp") && links.is_empty() {
-        links.push(("Yt".to_string(), url.clone(), Some(ALLANIME_REFR.to_string())));
+        links.push((
+            "Yt".to_string(),
+            url.clone(),
+            Some(ALLANIME_REFR.to_string()),
+        ));
     }
 
     Ok(links)
@@ -700,7 +881,9 @@ async fn parse_master_m3u8(
 ) -> Result<Vec<(String, String, Option<String>)>> {
     let base = url.rsplitn(2, '/').last().unwrap_or("").to_string() + "/";
     let mut req = client.get(url);
-    if let Some(r) = refr { req = req.header("Referer", r); }
+    if let Some(r) = refr {
+        req = req.header("Referer", r);
+    }
     let body = req.send().await?.text().await?;
 
     let mut links = Vec::new();
@@ -708,15 +891,19 @@ async fn parse_master_m3u8(
 
     for line in body.lines() {
         if line.starts_with("#EXT-X-STREAM-INF") {
-            current_res = line.split("RESOLUTION=")
+            current_res = line
+                .split("RESOLUTION=")
                 .nth(1)
                 .and_then(|s| s.split(',').next())
                 .and_then(|s| s.split('x').last())
                 .map(|h| format!("{h}p"))
                 .unwrap_or_else(|| "unknown".to_string());
         } else if !line.starts_with('#') && !line.is_empty() {
-            let full_url = if line.starts_with("http") { line.to_string() }
-                           else { format!("{base}{line}") };
+            let full_url = if line.starts_with("http") {
+                line.to_string()
+            } else {
+                format!("{base}{line}")
+            };
             links.push((current_res.clone(), full_url, refr.map(String::from)));
         }
     }
@@ -737,7 +924,7 @@ fn expand_wixmp(url: &str) -> Vec<(String, String, Option<String>)> {
         let resolutions_part = &base[res_start + 2..];
         if let Some(res_end) = resolutions_part.find('/') {
             let base_path = &base[..res_start];
-            let suffix    = &resolutions_part[res_end..];
+            let suffix = &resolutions_part[res_end..];
             return resolutions_part[..res_end]
                 .split(',')
                 .filter(|r| !r.is_empty())
@@ -745,7 +932,11 @@ fn expand_wixmp(url: &str) -> Vec<(String, String, Option<String>)> {
                     let clean_base = base_path
                         .trim_start_matches("https://")
                         .trim_start_matches("http://");
-                    (r.to_string(), format!("https://{clean_base}/{r}{suffix}"), None)
+                    (
+                        r.to_string(),
+                        format!("https://{clean_base}/{r}{suffix}"),
+                        None,
+                    )
                 })
                 .collect();
         }
@@ -767,7 +958,10 @@ fn client() -> reqwest::Client {
         .timeout(std::time::Duration::from_secs(30))
         .default_headers({
             let mut h = reqwest::header::HeaderMap::new();
-            h.insert("Referer", reqwest::header::HeaderValue::from_static(ALLANIME_REFR));
+            h.insert(
+                "Referer",
+                reqwest::header::HeaderValue::from_static(ALLANIME_REFR),
+            );
             h
         })
         .build()
