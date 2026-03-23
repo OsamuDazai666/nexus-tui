@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ────────────────────────────────────────────────────────────────────────────
-# nexus-tui uninstaller — Linux / macOS
-# Usage: bash <(curl -sSf https://raw.githubusercontent.com/OsamuDazai666/nexus-tui/main/uninstall.sh)
+# ani-nexus-tui uninstaller — Linux / macOS
+# Usage: bash <(curl -sSf https://raw.githubusercontent.com/OsamuDazai666/ani-nexus-tui/main/uninstall.sh)
 # ────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-INSTALL_DIR="${HOME}/.local/share/nexus-tui"
+INSTALL_DIR="${HOME}/.local/share/ani-nexus-tui"
 BIN_DIR="${HOME}/.local/bin"
-BINARY="${BIN_DIR}/nexus"
+BINARY="${BIN_DIR}/ani-nexus"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -15,7 +15,7 @@ CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 println()  { echo -e "$*"; }
-header()   { println "\n  ${YELLOW}◆${RESET} ${BOLD}NEXUS-TUI UNINSTALLER${RESET}\n  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"; }
+header()   { println "\n  ${YELLOW}◆${RESET} ${BOLD}ANI-NEXUS-TUI UNINSTALLER${RESET}\n  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"; }
 step()     { println "  ${CYAN}▶${RESET} ${BOLD}${1}${RESET}"; }
 ok()       { println "    ${GREEN}✓${RESET} ${1}"; }
 fail()     { println "    ${RED}✗${RESET} ${1}"; exit 1; }
@@ -33,7 +33,7 @@ ask() {
 clear
 header
 
-if ! ask "Are you sure you want to completely remove nexus-tui?"; then
+if ! ask "Are you sure you want to completely remove ani-nexus-tui?"; then
     println "\n  Cancelled.\n"
     exit 0
 fi
@@ -61,5 +61,5 @@ fi
 # ── Done ───────────────────────────────────────────────────────────────────────
 println ""
 sep
-println "  ${YELLOW}◆${RESET} ${BOLD}Successfully uninstalled nexus-tui${RESET}"
+println "  ${YELLOW}◆${RESET} ${BOLD}Successfully uninstalled ani-nexus-tui${RESET}"
 println ""

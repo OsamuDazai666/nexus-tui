@@ -1,5 +1,5 @@
 ﻿# ─────────────────────────────────────────────────────────────────────────────
-# nexus-tui uninstaller — Windows (PowerShell)
+# ani-nexus-tui uninstaller — Windows (PowerShell)
 # Run with: powershell -ExecutionPolicy Bypass -File uninstall.ps1
 # ─────────────────────────────────────────────────────────────────────────────
 $ErrorActionPreference = "Stop"
@@ -14,8 +14,8 @@ trap {
     exit 1
 }
 
-$INSTALL_DIR = Join-Path $env:APPDATA "nexus-tui"
-$BIN_DIR     = Join-Path $env:LOCALAPPDATA "Programs\nexus-tui"
+$INSTALL_DIR = Join-Path $env:APPDATA "ani-nexus-tui"
+$BIN_DIR     = Join-Path $env:LOCALAPPDATA "Programs\ani-nexus-tui"
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 function Write-Header {
@@ -23,7 +23,7 @@ function Write-Header {
     Write-Host ""
     Write-Host "  " -NoNewline
     Write-Host "◆ " -ForegroundColor Yellow -NoNewline
-    Write-Host "NEXUS-TUI UNINSTALLER" -ForegroundColor White
+    Write-Host "ANI-NEXUS-TUI UNINSTALLER" -ForegroundColor White
     Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
     Write-Host ""
 }
@@ -63,7 +63,7 @@ function Ask-YesNo($msg) {
 # ── Main ──────────────────────────────────────────────────────────────────────
 Write-Header
 
-if (-not (Ask-YesNo "Are you sure you want to completely remove nexus-tui?")) {
+if (-not (Ask-YesNo "Are you sure you want to completely remove ani-nexus-tui?")) {
     Write-Host ""; Write-Host "  Cancelled." -ForegroundColor DarkGray; Write-Host ""
     Read-Host "Press Enter to exit"
     exit 0
@@ -108,6 +108,6 @@ Write-Host ""
 Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
 Write-Host "  " -NoNewline
 Write-Host "◆ " -ForegroundColor Yellow -NoNewline
-Write-Host "Successfully uninstalled nexus-tui" -ForegroundColor White
+Write-Host "Successfully uninstalled ani-nexus-tui" -ForegroundColor White
 Write-Host ""
 Read-Host "Press Enter to exit"
