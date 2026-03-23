@@ -1,4 +1,4 @@
-# ─────────────────────────────────────────────────────────────────────────────
+﻿# ─────────────────────────────────────────────────────────────────────────────
 # nexus-tui installer — Windows (PowerShell)
 # Run with: powershell -ExecutionPolicy Bypass -File install.ps1
 # ─────────────────────────────────────────────────────────────────────────────
@@ -119,16 +119,23 @@ if (Test-Path (Join-Path $INSTALL_DIR ".git")) {
     $remote = git rev-parse origin/main 2>$null
 
     if ($local -eq $remote) {
-        Write-OK "Already up to date"
-        Write-Host ""
-        Write-Info "Binary: $BIN_EXE"
-        Write-Host ""
-        Write-Host "  ◆ Nothing to do. Run " -ForegroundColor Gray -NoNewline
-        Write-Host "nexus" -ForegroundColor Cyan -NoNewline
-        Write-Host " to launch." -ForegroundColor Gray
-        Write-Host ""
-        Read-Host "Press Enter to exit"
-        exit 0
+        $shortHash = git rev-parse --short HEAD 2>$null
+        Write-OK "Already up to date (Commit: $shortHash)"
+        
+        if (-not (Test-Path $BIN_EXE)) {
+            Write-Warn "Locally compiled executable not found — rebuilding from source"
+            Write-Host ""
+        } else {
+            Write-Host ""
+            Write-Info "Local Executable: $BIN_EXE"
+            Write-Host ""
+            Write-Host "  ◆ Nothing to do. Run " -ForegroundColor Gray -NoNewline
+            Write-Host "nexus" -ForegroundColor Cyan -NoNewline
+            Write-Host " to launch." -ForegroundColor Gray
+            Write-Host ""
+            Read-Host "Press Enter to exit"
+            exit 0
+        }
     }
 
     $commits = (git log --oneline "${local}..${remote}" 2>$null | Measure-Object -Line).Lines
@@ -138,7 +145,8 @@ if (Test-Path (Join-Path $INSTALL_DIR ".git")) {
     if (Ask-YesNo "Update nexus-tui?") {
         Write-Step "Pulling latest"
         git pull origin main --quiet 2>$null | Out-Null
-        Write-OK "Updated"
+        $newCommit = git rev-parse --short HEAD 2>$null
+        Write-OK "Pulled $newCommit"
         $skipClone = $true
     } else {
         Write-Host ""
@@ -212,7 +220,9 @@ if (-not $skipClone) {
     }
     Write-Host "`r                                      `r" -NoNewline
     Receive-Job $job | Out-Null; Remove-Job $job
-    Write-OK "Cloned to $INSTALL_DIR"
+    
+    $clonedCommit = git -C $INSTALL_DIR rev-parse --short HEAD 2>$null
+    Write-OK "Cloned to $INSTALL_DIR (Commit: $clonedCommit)"
     Write-Host ""
 }
 
@@ -246,7 +256,7 @@ Write-OK "Built in ${elapsed}s"
 Write-Host ""
 
 # ── Install binary ────────────────────────────────────────────────────────────
-Write-Step "Installing binary"
+Write-Step "Copying built executable to bin path"
 New-Item -ItemType Directory -Path $BIN_DIR -Force | Out-Null
 Copy-Item $EXE $BIN_EXE -Force
 Write-OK "Installed to $BIN_EXE"
