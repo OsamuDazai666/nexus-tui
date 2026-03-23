@@ -113,6 +113,7 @@ pub struct App {
     pub history_idx:        usize,
     pub history_filter:     String,
     pub history_filtered:   Vec<usize>,
+    pub history_searching:  bool,  // true = typing into filter, false = navigating results
     pub history_cover:      Option<ratatui_image::protocol::StatefulProtocol>,
     pub history_cover_id:   Option<String>,
     // Episode list for the selected history entry
@@ -211,8 +212,9 @@ impl App {
             anime_episode_records: std::collections::HashMap::new(),
             history,
             history_idx:   0,
-            history_filter:   String::new(),
-            history_filtered: Vec::new(),
+            history_filter:    String::new(),
+            history_filtered:  Vec::new(),
+            history_searching: false,
             history_cover:    None,
             history_cover_id: None,
             history_episode_list:     Vec::new(),
@@ -1055,22 +1057,51 @@ impl App {
     }
 
     async fn key_history(&mut self, key: KeyEvent) -> Result<()> {
+        // ── Typing mode: characters go into the filter ────────────────────────
+        if self.history_searching {
+            match key.code {
+                KeyCode::Enter | KeyCode::Esc => {
+                    self.history_searching = false;
+                    if key.code == KeyCode::Esc {
+                        self.history_filter.clear();
+                        self.history_filtered.clear();
+                        self.history_idx = 0;
+                        self.history_cover = None;
+                        self.history_cover_id = None;
+                    }
+                }
+                KeyCode::Backspace => {
+                    self.history_filter.pop();
+                    self.history_idx = 0;
+                    self.history_cover = None;
+                    self.history_cover_id = None;
+                    self.rebuild_history_filter();
+                    if self.history_filter.is_empty() {
+                        self.history_searching = false;
+                    }
+                }
+                KeyCode::Char(c) => {
+                    self.history_filter.push(c);
+                    self.history_idx = 0;
+                    self.history_cover = None;
+                    self.history_cover_id = None;
+                    self.rebuild_history_filter();
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
+
+        // ── Navigation mode ───────────────────────────────────────────────────
         match key.code {
-            KeyCode::Up | KeyCode::Char('k') if self.history_filter.is_empty() => {
+            KeyCode::Up | KeyCode::Char('k') => {
                 if self.history_idx > 0 {
                     self.history_idx -= 1;
                     self.history_cover = None;
                     self.history_cover_id = None;
                 }
             }
-            KeyCode::Up => {
-                if self.history_idx > 0 {
-                    self.history_idx -= 1;
-                    self.history_cover = None;
-                    self.history_cover_id = None;
-                }
-            }
-            KeyCode::Down | KeyCode::Char('j') if self.history_filter.is_empty() => {
+            KeyCode::Down | KeyCode::Char('j') => {
                 let len = if self.history_filter.is_empty() {
                     self.history.len()
                 } else {
@@ -1082,22 +1113,7 @@ impl App {
                     self.history_cover_id = None;
                 }
             }
-            KeyCode::Down => {
-                let len = if self.history_filter.is_empty() {
-                    self.history.len()
-                } else {
-                    self.history_filtered.len()
-                };
-                if self.history_idx + 1 < len {
-                    self.history_idx += 1;
-                    self.history_cover = None;
-                    self.history_cover_id = None;
-                }
-            }
-            KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') if self.history_filter.is_empty() => {
-                self.focus = Focus::HistoryDetail;
-            }
-            KeyCode::Right if !self.history_filter.is_empty() => {
+            KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
                 self.focus = Focus::HistoryDetail;
             }
             KeyCode::Delete => {
@@ -1131,7 +1147,6 @@ impl App {
                     }
                 }
             }
-            KeyCode::Right => { self.focus = Focus::HistoryDetail; }
             KeyCode::Esc => {
                 if !self.history_filter.is_empty() {
                     self.history_filter.clear();
@@ -1142,7 +1157,9 @@ impl App {
                 }
             }
             KeyCode::Backspace => {
+                // Re-enter search mode on backspace if filter exists
                 if !self.history_filter.is_empty() {
+                    self.history_searching = true;
                     self.history_filter.pop();
                     self.history_idx = 0;
                     self.history_cover = None;
@@ -1150,7 +1167,12 @@ impl App {
                     self.rebuild_history_filter();
                 }
             }
-            KeyCode::Char(c) => {
+            KeyCode::Char('/') => {
+                self.history_searching = true;
+            }
+            KeyCode::Char(c) if c != 'j' && c != 'k' && c != 'l' => {
+                // Any non-nav char starts a search
+                self.history_searching = true;
                 self.history_filter.push(c);
                 self.history_idx = 0;
                 self.history_cover = None;
@@ -1842,6 +1864,7 @@ impl App {
         self.history_ep_window_end    = 0;
         self.history_episodes_loading = false;
         self.focus = if tab == Tab::History { Focus::History } else { Focus::Search };
+        self.history_searching = false;
         self.status = format!("{tab}  •  type to search");
     }
 
