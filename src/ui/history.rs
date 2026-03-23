@@ -39,13 +39,14 @@ fn draw_list(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_filter_bar(f: &mut Frame, app: &App, area: Rect, list_focused: bool) {
-    let has_filter = !app.history_filter.is_empty();
+    let has_filter    = !app.history_filter.is_empty();
+    let is_searching  = app.history_searching && list_focused;
 
     let content = if app.history_filter.is_empty() {
         Line::from(vec![
             Span::styled("  ", Style::default()),
             Span::styled(
-                if list_focused { "type to filter…▌" } else { "type to filter…" },
+                if is_searching { "type to filter…▌" } else { "type to filter…" },
                 Style::default().fg(C_DIM),
             ),
         ])
@@ -54,7 +55,7 @@ fn draw_filter_bar(f: &mut Frame, app: &App, area: Rect, list_focused: bool) {
             Span::styled("  ", Style::default()),
             Span::styled(&app.history_filter, Style::default().fg(C_TEXT).add_modifier(Modifier::BOLD)),
             Span::styled(
-                if list_focused { "▌" } else { "" },
+                if is_searching { "▌" } else { "" },
                 Style::default().fg(crate::ui::accent()),
             ),
             Span::styled(
@@ -65,8 +66,10 @@ fn draw_filter_bar(f: &mut Frame, app: &App, area: Rect, list_focused: bool) {
         ])
     };
 
-    let title = if has_filter {
-        Span::styled(" FILTER [Esc clear] ", Style::default().fg(crate::ui::accent()).add_modifier(Modifier::BOLD))
+    let title = if is_searching {
+        Span::styled(" FILTER  [Enter] navigate  [Esc] clear ", Style::default().fg(crate::ui::accent()).add_modifier(Modifier::BOLD))
+    } else if has_filter {
+        Span::styled(" FILTER  [Esc] clear ", Style::default().fg(crate::ui::accent_dim()))
     } else {
         Span::styled(" FILTER ", Style::default().fg(C_DIM))
     };
