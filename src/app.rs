@@ -13,34 +13,62 @@ use tokio::sync::{mpsc, Mutex};
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq, strum::Display, strum::EnumIter)]
-pub enum Tab { Anime, History, Settings }
+pub enum Tab {
+    Anime,
+    History,
+    Settings,
+}
 
 // ── Focus ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Focus { Search, Results, Detail, History, HistoryDetail, HistoryEpisodes, EpisodePrompt, SettingsList, SettingsEdit }
+pub enum Focus {
+    Search,
+    Results,
+    Detail,
+    History,
+    HistoryDetail,
+    HistoryEpisodes,
+    EpisodePrompt,
+    SettingsList,
+    SettingsEdit,
+}
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
 
-const SPINNER: &[&str] = &["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-pub struct Spinner { pub frame: usize, last: Instant }
+pub struct Spinner {
+    pub frame: usize,
+    last: Instant,
+}
 
 impl Spinner {
-    pub fn new() -> Self { Self { frame: 0, last: Instant::now() } }
+    pub fn new() -> Self {
+        Self {
+            frame: 0,
+            last: Instant::now(),
+        }
+    }
     pub fn tick(&mut self) {
         if self.last.elapsed() >= Duration::from_millis(80) {
             self.frame = (self.frame + 1) % SPINNER.len();
             self.last = Instant::now();
         }
     }
-    pub fn symbol(&self) -> &'static str { SPINNER[self.frame] }
+    pub fn symbol(&self) -> &'static str {
+        SPINNER[self.frame]
+    }
 }
 
 // ── Toasts ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ToastKind { Info, Success, Error }
+pub enum ToastKind {
+    Info,
+    Success,
+    Error,
+}
 
 pub struct Toast {
     pub message: String,
@@ -49,36 +77,92 @@ pub struct Toast {
 }
 
 impl Toast {
-    pub fn info(msg: impl Into<String>)    -> Self { Self { message: msg.into(), kind: ToastKind::Info,    born: Instant::now() } }
-    pub fn success(msg: impl Into<String>) -> Self { Self { message: msg.into(), kind: ToastKind::Success, born: Instant::now() } }
-    pub fn error(msg: impl Into<String>)   -> Self { Self { message: msg.into(), kind: ToastKind::Error,   born: Instant::now() } }
-    pub fn alive(&self) -> bool { self.born.elapsed() < Duration::from_secs(5) }
-    pub fn age_pct(&self) -> f64 { (self.born.elapsed().as_secs_f64() / 5.0).clamp(0.0, 1.0) }
+    pub fn info(msg: impl Into<String>) -> Self {
+        Self {
+            message: msg.into(),
+            kind: ToastKind::Info,
+            born: Instant::now(),
+        }
+    }
+    pub fn success(msg: impl Into<String>) -> Self {
+        Self {
+            message: msg.into(),
+            kind: ToastKind::Success,
+            born: Instant::now(),
+        }
+    }
+    pub fn error(msg: impl Into<String>) -> Self {
+        Self {
+            message: msg.into(),
+            kind: ToastKind::Error,
+            born: Instant::now(),
+        }
+    }
+    pub fn alive(&self) -> bool {
+        self.born.elapsed() < Duration::from_secs(5)
+    }
+    pub fn age_pct(&self) -> f64 {
+        (self.born.elapsed().as_secs_f64() / 5.0).clamp(0.0, 1.0)
+    }
 }
 
 // ── Image protocol ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ImageProtocol { Kitty, HalfBlock }
+pub enum ImageProtocol {
+    Kitty,
+    HalfBlock,
+}
 
 // ── Async messages ────────────────────────────────────────────────────────────
 
 pub enum AppMsg {
-    SearchResults { items: Vec<ContentItem>, gen: u64 },
+    SearchResults {
+        items: Vec<ContentItem>,
+        gen: u64,
+    },
     MoreResults(Vec<ContentItem>),
     DetailLoaded(ContentItem),
-    ImageFetched { url: String, item_id: String, bytes: Vec<u8> },
-    ImageDecoded { id: String, image: image::DynamicImage },
+    ImageFetched {
+        url: String,
+        item_id: String,
+        bytes: Vec<u8>,
+    },
+    ImageDecoded {
+        id: String,
+        image: image::DynamicImage,
+    },
     StreamUrl(String),
-    EpisodeList { id: String, eps: Vec<String> },
-    HistoryEpisodeList { anime_id: String, eps: Vec<String> },
-    AnimeEpisodeRecords { anime_id: String, records: Vec<EpisodeRecord> },
+    EpisodeList {
+        id: String,
+        eps: Vec<String>,
+    },
+    HistoryEpisodeList {
+        anime_id: String,
+        eps: Vec<String>,
+    },
+    AnimeEpisodeRecords {
+        anime_id: String,
+        records: Vec<EpisodeRecord>,
+    },
     MalIdResolved(Option<u32>),
     SkipTimesReady(Option<crate::api::allanime::SkipTimes>),
     /// Windowed episode records loaded from DB
-    EpisodeWindowLoaded { anime_id: String, start: usize, end: usize, records: Vec<EpisodeRecord> },
+    EpisodeWindowLoaded {
+        anime_id: String,
+        start: usize,
+        end: usize,
+        records: Vec<EpisodeRecord>,
+    },
     /// Request main loop to launch mpv synchronously (terminal-safe)
-    LaunchMpv { url: String, anime_id: String, episode: String, resume_from: f64, skip_times: Option<crate::api::allanime::SkipTimes>, skip_setting: String },
+    LaunchMpv {
+        url: String,
+        anime_id: String,
+        episode: String,
+        resume_from: f64,
+        skip_times: Option<crate::api::allanime::SkipTimes>,
+        skip_setting: String,
+    },
     Playback(PlaybackEvent),
     Error(String),
 }
@@ -87,88 +171,95 @@ pub enum AppMsg {
 
 pub struct App {
     // Navigation
-    pub active_tab:   Tab,
-    pub focus:        Focus,
+    pub active_tab: Tab,
+    pub focus: Focus,
 
     // Search
-    pub search_input:  String,
+    pub search_input: String,
     pub search_cursor: usize,
-    pub is_searching:  bool,
-    pub search_gen:    u64,   // generation counter — drop stale results
-    pub current_page:  u32,  // for pagination
+    pub is_searching: bool,
+    pub search_gen: u64,   // generation counter — drop stale results
+    pub current_page: u32, // for pagination
 
     // Results
-    pub results:     Vec<ContentItem>,
+    pub results: Vec<ContentItem>,
     pub results_idx: usize,
-    pub has_more:    bool,
+    pub has_more: bool,
 
     // Detail
-    pub selected:     Option<ContentItem>,
+    pub selected: Option<ContentItem>,
     pub detail_scroll: u16,
     /// Per-episode DB records for the currently selected anime (Anime tab progress display)
     pub anime_episode_records: std::collections::HashMap<String, EpisodeRecord>,
 
     // History
-    pub history:            Vec<HistoryEntry>,
-    pub history_idx:        usize,
-    pub history_filter:     String,
-    pub history_filtered:   Vec<usize>,
-    pub history_searching:  bool,  // true = typing into filter, false = navigating results
-    pub history_cover:      Option<ratatui_image::protocol::StatefulProtocol>,
-    pub history_cover_id:   Option<String>,
+    pub history: Vec<HistoryEntry>,
+    pub history_idx: usize,
+    pub history_filter: String,
+    pub history_filtered: Vec<usize>,
+    pub history_searching: bool, // true = typing into filter, false = navigating results
+    pub history_cover: Option<ratatui_image::protocol::StatefulProtocol>,
+    pub history_cover_id: Option<String>,
     // Episode list for the selected history entry
-    pub history_episode_list:      Vec<String>,
-    pub history_episode_idx:       usize,
-    pub history_episodes_loading:  bool,
+    pub history_episode_list: Vec<String>,
+    pub history_episode_idx: usize,
+    pub history_episodes_loading: bool,
     // Virtual scroll window — only records for [window_start..window_end] are in memory
-    pub history_ep_window_start:   usize,
-    pub history_ep_window_end:     usize,
-    pub history_ep_cols:           usize,
+    pub history_ep_window_start: usize,
+    pub history_ep_window_end: usize,
+    pub history_ep_cols: usize,
     pub history_ep_window_records: std::collections::HashMap<String, EpisodeRecord>,
 
     // Episode prompt + playback options
-    pub episode_input:  String,
+    pub episode_input: String,
     pub episode_cursor: usize,
-    pub stream_mode:    String,   // "sub" | "dub"
-    pub stream_quality: String,   // "best" | "1080" | "720" | "480"
-    pub episode_list:       Vec<String>,
-    pub episode_list_idx:   usize,
-    pub episode_cols:       usize,   // synced from UI each frame for 2-D grid nav
+    pub stream_mode: String,    // "sub" | "dub"
+    pub stream_quality: String, // "best" | "1080" | "720" | "480"
+    pub episode_list: Vec<String>,
+    pub episode_list_idx: usize,
+    pub episode_cols: usize, // synced from UI each frame for 2-D grid nav
 
     // Async
     pub msg_tx: mpsc::UnboundedSender<AppMsg>,
-    msg_rx:     Arc<Mutex<mpsc::UnboundedReceiver<AppMsg>>>,
-    pub db:     Arc<HistoryStore>,
+    msg_rx: Arc<Mutex<mpsc::UnboundedReceiver<AppMsg>>>,
+    pub db: Arc<HistoryStore>,
 
     // UX feedback
-    pub spinner:  Spinner,
-    pub toasts:   Vec<Toast>,
-    pub status:   String,
+    pub spinner: Spinner,
+    pub toasts: Vec<Toast>,
+    pub status: String,
 
     pub image_protocol: ImageProtocol,
     pub image_picker: ratatui_image::picker::Picker,
     pub cover_protocol: Option<ratatui_image::protocol::StatefulProtocol>,
     pub needs_redraw: bool,
     /// Set by handle_msg(LaunchMpv) — consumed by main loop to run mpv on main thread
-    pub pending_mpv: Option<(String, String, String, f64, Option<crate::api::allanime::SkipTimes>, String)>, // (url, anime_id, episode, resume, skip_times, skip_setting)
+    pub pending_mpv: Option<(
+        String,
+        String,
+        String,
+        f64,
+        Option<crate::api::allanime::SkipTimes>,
+        String,
+    )>, // (url, anime_id, episode, resume, skip_times, skip_setting)
 
     // Settings
-    pub config:            crate::config::Config,
+    pub config: crate::config::Config,
     pub settings_category: usize,
-    pub settings_row:      usize,
-    pub settings_editing:  bool,
-    pub settings_input:    String,
-    pub settings_error:    Option<String>,
-    pub prev_tab:          Tab,
+    pub settings_row: usize,
+    pub settings_editing: bool,
+    pub settings_input: String,
+    pub settings_error: Option<String>,
+    pub prev_tab: Tab,
     /// Cursor position within each color row's swatch list [accent, progress, complete]
     pub settings_color_idx: [usize; 3],
     /// MAL ID for the currently selected anime (resolved async for AniSkip)
-    pub mal_id:   Option<u32>,
+    pub mal_id: Option<u32>,
     /// Skip timestamps for the currently playing episode
     pub skip_times: Option<crate::api::allanime::SkipTimes>,
 
     // ── In-memory caches ──────────────────────────────────────────────────────
-    pub image_cache:  std::collections::HashMap<String, Vec<u8>>,
+    pub image_cache: std::collections::HashMap<String, Vec<u8>>,
     image_cache_order: std::collections::VecDeque<String>,
     pub detail_cache: std::collections::HashMap<String, CachedDetail>,
     detail_cache_order: std::collections::VecDeque<String>,
@@ -177,7 +268,7 @@ pub struct App {
     pub rgba_cache: std::collections::HashMap<String, image::DynamicImage>,
 }
 
-const IMAGE_CACHE_MAX:  usize = 30;
+const IMAGE_CACHE_MAX: usize = 30;
 const DETAIL_CACHE_MAX: usize = 50;
 
 /// Everything we pre-fetch when an item is selected, stored so revisiting is free.
@@ -189,89 +280,95 @@ pub struct CachedDetail {
 impl App {
     pub async fn new(image_picker: ratatui_image::picker::Picker) -> Result<Self> {
         let (tx, rx) = mpsc::unbounded_channel();
-        let db      = Arc::new(HistoryStore::open()?);
+        let db = Arc::new(HistoryStore::open()?);
         let history = db.load_all()?;
         let protocol = detect_image_protocol();
-        let cfg     = crate::config::Config::load();
+        let cfg = crate::config::Config::load();
 
         Ok(Self {
-            active_tab:    Tab::Anime,
-            stream_mode:   cfg.player.stream_mode.clone(),
+            active_tab: Tab::Anime,
+            stream_mode: cfg.player.stream_mode.clone(),
             stream_quality: cfg.player.quality.clone(),
-            focus:         Focus::Search,
-            search_input:  String::new(),
+            focus: Focus::Search,
+            search_input: String::new(),
             search_cursor: 0,
-            is_searching:  false,
-            search_gen:    0,
-            current_page:  1,
-            results:       Vec::new(),
-            results_idx:   0,
-            has_more:      false,
-            selected:      None,
+            is_searching: false,
+            search_gen: 0,
+            current_page: 1,
+            results: Vec::new(),
+            results_idx: 0,
+            has_more: false,
+            selected: None,
             detail_scroll: 0,
             anime_episode_records: std::collections::HashMap::new(),
             history,
-            history_idx:   0,
-            history_filter:    String::new(),
-            history_filtered:  Vec::new(),
+            history_idx: 0,
+            history_filter: String::new(),
+            history_filtered: Vec::new(),
             history_searching: false,
-            history_cover:    None,
+            history_cover: None,
             history_cover_id: None,
-            history_episode_list:     Vec::new(),
-            history_episode_idx:       0,
-            history_episodes_loading:  false,
-            history_ep_window_start:   0,
-            history_ep_window_end:     0,
-            history_ep_cols:           2,
+            history_episode_list: Vec::new(),
+            history_episode_idx: 0,
+            history_episodes_loading: false,
+            history_ep_window_start: 0,
+            history_ep_window_end: 0,
+            history_ep_cols: 2,
             history_ep_window_records: std::collections::HashMap::new(),
-            episode_input:    String::new(),
-            episode_cursor:   0,
-            episode_list:     Vec::new(),
+            episode_input: String::new(),
+            episode_cursor: 0,
+            episode_list: Vec::new(),
             episode_list_idx: 0,
-            episode_cols:     8,
+            episode_cols: 8,
             msg_tx: tx,
             msg_rx: Arc::new(Mutex::new(rx)),
             db,
-            spinner:  Spinner::new(),
-            toasts:   Vec::new(),
-            status:   "Type to search  •  press Enter".to_string(),
+            spinner: Spinner::new(),
+            toasts: Vec::new(),
+            status: "Type to search  •  press Enter".to_string(),
             image_protocol: protocol,
             image_picker,
             cover_protocol: None,
-            needs_redraw:  false,
-            pending_mpv:   None,
-            config:            cfg.clone(),
+            needs_redraw: false,
+            pending_mpv: None,
+            config: cfg.clone(),
             settings_category: 0,
-            settings_row:      0,
-            settings_editing:  false,
-            settings_input:    String::new(),
-            settings_error:    None,
-            prev_tab:          Tab::Anime,
+            settings_row: 0,
+            settings_editing: false,
+            settings_input: String::new(),
+            settings_error: None,
+            prev_tab: Tab::Anime,
             settings_color_idx: [0, 0, 0],
-            mal_id:    None,
+            mal_id: None,
             skip_times: None,
-            image_cache:       std::collections::HashMap::new(),
+            image_cache: std::collections::HashMap::new(),
             image_cache_order: std::collections::VecDeque::new(),
-            detail_cache:       std::collections::HashMap::new(),
+            detail_cache: std::collections::HashMap::new(),
             detail_cache_order: std::collections::VecDeque::new(),
-            rgba_cache:         std::collections::HashMap::new(),
+            rgba_cache: std::collections::HashMap::new(),
         })
     }
 
     // ── Tick (called every ~100ms) ────────────────────────────────────────────
 
     pub async fn tick(&mut self) -> Result<()> {
-        if self.is_searching { self.spinner.tick(); }
+        if self.is_searching {
+            self.spinner.tick();
+        }
         self.toasts.retain(|t| t.alive());
 
         // Drain messages
         let msgs: Vec<AppMsg> = {
             let mut rx = self.msg_rx.lock().await;
             let mut v = Vec::new();
-            while let Ok(m) = rx.try_recv() { v.push(m); }
+            while let Ok(m) = rx.try_recv() {
+                v.push(m);
+            }
             v
         };
-        for msg in msgs { self.handle_msg(msg); }
+        for msg in msgs {
+            self.handle_msg(msg);
+        }
 
         // Lazily load cover and episode list for selected history entry
         if self.active_tab == Tab::History {
@@ -286,7 +383,9 @@ impl App {
     fn handle_msg(&mut self, msg: AppMsg) {
         match msg {
             AppMsg::SearchResults { items, gen } => {
-                if gen != self.search_gen { return; }
+                if gen != self.search_gen {
+                    return;
+                }
                 self.is_searching = false;
                 self.has_more = items.len() >= 25;
                 self.results = items;
@@ -319,16 +418,26 @@ impl App {
                 self.prefetch_episode_lists(prev_len, self.results.len());
                 self.prefetch_images(prev_len, (prev_len + 5).min(self.results.len()));
             }
-            AppMsg::DetailLoaded(item) => { self.selected = Some(item); self.detail_scroll = 0; }
+            AppMsg::DetailLoaded(item) => {
+                self.selected = Some(item);
+                self.detail_scroll = 0;
+            }
 
             // Bytes fetched — store in byte cache, spawn JPEG/PNG decode off main thread
-            AppMsg::ImageFetched { url, item_id, bytes } => {
+            AppMsg::ImageFetched {
+                url,
+                item_id,
+                bytes,
+            } => {
                 self.cache_image(url, bytes.clone());
                 let tx = self.msg_tx.clone();
                 tokio::spawn(async move {
                     if let Ok(img) = image::load_from_memory(&bytes) {
                         let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
-                        let _ = tx.send(AppMsg::ImageDecoded { id: item_id, image: dyn_img });
+                        let _ = tx.send(AppMsg::ImageDecoded {
+                            id: item_id,
+                            image: dyn_img,
+                        });
                     }
                 });
             }
@@ -338,7 +447,12 @@ impl App {
                 // Store decoded pixels — future visits skip the decode entirely
                 self.rgba_cache.insert(id.clone(), image);
                 // Build and assign the protocol if this item is still on screen
-                if self.selected.as_ref().map(|s| s.id() == id).unwrap_or(false) {
+                if self
+                    .selected
+                    .as_ref()
+                    .map(|s| s.id() == id)
+                    .unwrap_or(false)
+                {
                     self.build_cover_protocol(&id);
                 }
                 // Also build history cover if it matches the currently viewed history entry
@@ -349,12 +463,18 @@ impl App {
 
             // Episode list fetched — store in detail cache and apply if still selected
             AppMsg::EpisodeList { id, eps } => {
-                let entry = self.detail_cache.entry(id.clone()).or_insert(CachedDetail {
-                    episode_list: None,
-                });
+                let entry = self
+                    .detail_cache
+                    .entry(id.clone())
+                    .or_insert(CachedDetail { episode_list: None });
                 entry.episode_list = Some(eps.clone());
                 self.bump_detail_cache(&id);
-                if self.selected.as_ref().map(|s| s.id() == id).unwrap_or(false) {
+                if self
+                    .selected
+                    .as_ref()
+                    .map(|s| s.id() == id)
+                    .unwrap_or(false)
+                {
                     self.episode_list = eps;
                     self.episode_list_idx = 0;
                 }
@@ -365,32 +485,72 @@ impl App {
                 self.status = "Playing".to_string();
                 self.toast_success("Launching mpv…");
                 // Defer to main loop for terminal-safe launch
-                self.pending_mpv = Some((url, String::new(), String::new(), 0.0, None, "none".to_string()));
+                self.pending_mpv = Some((
+                    url,
+                    String::new(),
+                    String::new(),
+                    0.0,
+                    None,
+                    "none".to_string(),
+                ));
                 self.needs_redraw = true;
             }
 
-            AppMsg::LaunchMpv { url, anime_id, episode, resume_from, skip_times, skip_setting } => {
+            AppMsg::LaunchMpv {
+                url,
+                anime_id,
+                episode,
+                resume_from,
+                skip_times,
+                skip_setting,
+            } => {
                 self.toast_success("Launching mpv…");
-                crate::api::allanime::skip_log(&format!("[nexus-skip] LaunchMpv: skip_setting={skip_setting} skip_times_some={}", skip_times.is_some()));
-                self.pending_mpv = Some((url, anime_id, episode, resume_from, skip_times, skip_setting));
+                crate::api::allanime::skip_log(&format!(
+                    "[nexus-skip] LaunchMpv: skip_setting={skip_setting} skip_times_some={}",
+                    skip_times.is_some()
+                ));
+                self.pending_mpv = Some((
+                    url,
+                    anime_id,
+                    episode,
+                    resume_from,
+                    skip_times,
+                    skip_setting,
+                ));
                 self.needs_redraw = true;
             }
-            AppMsg::EpisodeWindowLoaded { anime_id, start, end, records } => {
-                if self.history_selected().map(|e| e.id == anime_id).unwrap_or(false) {
+            AppMsg::EpisodeWindowLoaded {
+                anime_id,
+                start,
+                end,
+                records,
+            } => {
+                if self
+                    .history_selected()
+                    .map(|e| e.id == anime_id)
+                    .unwrap_or(false)
+                {
                     self.history_ep_window_start = start;
-                    self.history_ep_window_end   = end;
+                    self.history_ep_window_end = end;
                     self.history_ep_window_records.clear();
                     for rec in records {
-                        self.history_ep_window_records.insert(rec.episode_number.clone(), rec);
+                        self.history_ep_window_records
+                            .insert(rec.episode_number.clone(), rec);
                     }
                 }
             }
 
             AppMsg::AnimeEpisodeRecords { anime_id, records } => {
-                if self.selected.as_ref().map(|s| s.id() == anime_id).unwrap_or(false) {
+                if self
+                    .selected
+                    .as_ref()
+                    .map(|s| s.id() == anime_id)
+                    .unwrap_or(false)
+                {
                     self.anime_episode_records.clear();
                     for rec in records {
-                        self.anime_episode_records.insert(rec.episode_number.clone(), rec);
+                        self.anime_episode_records
+                            .insert(rec.episode_number.clone(), rec);
                     }
                 }
             }
@@ -401,10 +561,11 @@ impl App {
             }
 
             AppMsg::SkipTimesReady(times) => {
-                crate::api::allanime::skip_log(&format!("[nexus-skip] SkipTimesReady: intro={} outro={}",
+                crate::api::allanime::skip_log(&format!(
+                    "[nexus-skip] SkipTimesReady: intro={} outro={}",
                     times.as_ref().map(|t| t.intro.is_some()).unwrap_or(false),
-                    times.as_ref().map(|t| t.outro.is_some()).unwrap_or(false)),
-                );
+                    times.as_ref().map(|t| t.outro.is_some()).unwrap_or(false)
+                ));
                 self.skip_times = times;
             }
 
@@ -415,20 +576,25 @@ impl App {
                         self.history[pos] = updated;
                     }
                 }
-                if self.history_selected().map(|e| e.id == anime_id).unwrap_or(false) {
+                if self
+                    .history_selected()
+                    .map(|e| e.id == anime_id)
+                    .unwrap_or(false)
+                {
                     self.history_episode_list = eps;
                     self.history_episodes_loading = false;
                     self.history_ep_window_start = 0;
-                    self.history_ep_window_end   = 0;
+                    self.history_ep_window_end = 0;
                     self.history_ep_window_records.clear();
                     self.history_episode_idx = self.last_watched_episode_idx();
 
                     // Synchronously load the initial window so first render has data
                     let ep_count = self.history_episode_list.len();
-                    let idx      = self.history_episode_idx;
-                    let start    = idx.saturating_sub(40);
-                    let end      = (idx + 40).min(ep_count);
-                    let window_eps: Vec<&str> = self.history_episode_list
+                    let idx = self.history_episode_idx;
+                    let start = idx.saturating_sub(40);
+                    let end = (idx + 40).min(ep_count);
+                    let window_eps: Vec<&str> = self
+                        .history_episode_list
                         .get(start..end)
                         .unwrap_or(&[])
                         .iter()
@@ -436,9 +602,10 @@ impl App {
                         .collect();
                     if let Ok(recs) = self.db.load_episodes_in(&anime_id, &window_eps) {
                         self.history_ep_window_start = start;
-                        self.history_ep_window_end   = end;
+                        self.history_ep_window_end = end;
                         for rec in recs {
-                            self.history_ep_window_records.insert(rec.episode_number.clone(), rec);
+                            self.history_ep_window_records
+                                .insert(rec.episode_number.clone(), rec);
                         }
                     }
                 }
@@ -446,62 +613,107 @@ impl App {
 
             AppMsg::Playback(event) => {
                 match event {
-                    PlaybackEvent::Position { anime_id, episode, position, duration, checkpoint } => {
+                    PlaybackEvent::Position {
+                        anime_id,
+                        episode,
+                        position,
+                        duration,
+                        checkpoint,
+                    } => {
                         let fully = duration > 0.0 && position / duration >= 0.95;
                         // Update history window records (History tab live display)
                         if let Some(rec) = self.history_ep_window_records.get_mut(&episode) {
                             if rec.anime_id == anime_id {
                                 rec.position_seconds = position;
-                                if duration > 0.0 { rec.duration_seconds = duration; }
+                                if duration > 0.0 {
+                                    rec.duration_seconds = duration;
+                                }
                                 rec.fully_watched = fully;
                             }
                         }
                         // Update anime episode records (Anime tab live display)
-                        let rec = self.anime_episode_records.entry(episode.clone())
+                        let rec = self
+                            .anime_episode_records
+                            .entry(episode.clone())
                             .or_insert_with(|| crate::db::history::EpisodeRecord {
-                                anime_id:         anime_id.clone(),
-                                episode_number:   episode.clone(),
-                                stream_url:       None,
-                                watched:          true,
-                                watch_timestamp:  None,
+                                anime_id: anime_id.clone(),
+                                episode_number: episode.clone(),
+                                stream_url: None,
+                                watched: true,
+                                watch_timestamp: None,
                                 position_seconds: 0.0,
                                 duration_seconds: 0.0,
-                                fully_watched:    false,
+                                fully_watched: false,
                             });
                         rec.position_seconds = position;
-                        if duration > 0.0 { rec.duration_seconds = duration; }
+                        if duration > 0.0 {
+                            rec.duration_seconds = duration;
+                        }
                         rec.fully_watched = fully;
 
                         if checkpoint {
-                            let _ = self.db.update_position(&anime_id, &episode, position, duration);
+                            let _ = self
+                                .db
+                                .update_position(&anime_id, &episode, position, duration);
                         }
                     }
-                    PlaybackEvent::Finished { anime_id, episode, position, duration } => {
-                        let _ = self.db.update_position(&anime_id, &episode, position, duration);
+                    PlaybackEvent::Finished {
+                        anime_id,
+                        episode,
+                        position,
+                        duration,
+                    } => {
+                        let _ = self
+                            .db
+                            .update_position(&anime_id, &episode, position, duration);
                         // Update anime_episode_records with final position
                         let fully = duration > 0.0 && position / duration >= 0.95;
-                        let rec = self.anime_episode_records.entry(episode.clone())
+                        let rec = self
+                            .anime_episode_records
+                            .entry(episode.clone())
                             .or_insert_with(|| crate::db::history::EpisodeRecord {
-                                anime_id:         anime_id.clone(),
-                                episode_number:   episode.clone(),
-                                stream_url:       None,
-                                watched:          true,
-                                watch_timestamp:  None,
+                                anime_id: anime_id.clone(),
+                                episode_number: episode.clone(),
+                                stream_url: None,
+                                watched: true,
+                                watch_timestamp: None,
                                 position_seconds: 0.0,
                                 duration_seconds: 0.0,
-                                fully_watched:    false,
+                                fully_watched: false,
                             });
                         rec.position_seconds = position;
-                        if duration > 0.0 { rec.duration_seconds = duration; }
+                        if duration > 0.0 {
+                            rec.duration_seconds = duration;
+                        }
                         rec.fully_watched = fully;
+
+                        let selected_id = self.history_selected().map(|e| e.id.clone());
 
                         if let Ok(all) = self.db.load_all() {
                             self.history = all;
+                            self.rebuild_history_filter();
+                            if let Some(id) = selected_id {
+                                let new_idx = if self.history_filter.is_empty() {
+                                    self.history.iter().position(|e| e.id == id)
+                                } else {
+                                    self.history_filtered.iter().position(|&i| {
+                                        self.history.get(i).map(|e| e.id.as_str())
+                                            == Some(id.as_str())
+                                    })
+                                };
+                                if let Some(idx) = new_idx {
+                                    self.history_idx = idx;
+                                }
+                            }
                         }
                         // Force window reload for the finished anime
-                        if self.history_selected().map(|e| e.id == anime_id).unwrap_or(false) {
+                        if self
+                            .history_selected()
+                            .map(|e| e.id == anime_id)
+                            .unwrap_or(false)
+                        {
                             self.history_ep_window_start = 0;
-                            self.history_ep_window_end   = 0;
+                            self.history_ep_window_end = 0;
                             self.history_ep_window_records.clear();
                         }
                         self.toast_success("Playback saved");
@@ -539,12 +751,18 @@ impl App {
 
     /// Kick off a cover fetch for the currently selected history entry.
     pub fn load_history_cover(&mut self) {
-        let Some(entry) = self.history_selected().cloned() else { return };
-        let Some(url) = entry.cover_url.clone() else { return };
+        let Some(entry) = self.history_selected().cloned() else {
+            return;
+        };
+        let Some(url) = entry.cover_url.clone() else {
+            return;
+        };
         let id = entry.id.clone();
 
         // Already loaded for this entry
-        if self.history_cover_id.as_deref() == Some(id.as_str()) { return; }
+        if self.history_cover_id.as_deref() == Some(id.as_str()) {
+            return;
+        }
 
         self.history_cover = None;
         self.history_cover_id = Some(id.clone());
@@ -568,11 +786,16 @@ impl App {
                 let client = reqwest::Client::builder()
                     .user_agent("Mozilla/5.0")
                     .timeout(std::time::Duration::from_secs(15))
-                    .build().unwrap_or_default();
+                    .build()
+                    .unwrap_or_default();
                 if let Ok(r) = client.get(&url).send().await {
                     if let Ok(b) = r.bytes().await {
                         let bytes = b.to_vec();
-                        let _ = tx.send(AppMsg::ImageFetched { url, item_id: id.clone(), bytes: bytes.clone() });
+                        let _ = tx.send(AppMsg::ImageFetched {
+                            url,
+                            item_id: id.clone(),
+                            bytes: bytes.clone(),
+                        });
                         if let Ok(img) = image::load_from_memory(&bytes) {
                             let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
                             let _ = tx.send(AppMsg::ImageDecoded { id, image: dyn_img });
@@ -593,13 +816,16 @@ impl App {
                 self.history_ep_window_records.clear();
                 self.history_episode_idx = 0;
                 self.history_ep_window_start = 0;
-                self.history_ep_window_end   = 0;
+                self.history_ep_window_end = 0;
             }
             return;
         };
 
         // Detect which anime is currently loaded in the window
-        let loaded_id = self.history_ep_window_records.values().next()
+        let loaded_id = self
+            .history_ep_window_records
+            .values()
+            .next()
             .map(|r| r.anime_id.clone());
 
         // If we already have a fresh list for this entry, nothing to do
@@ -617,20 +843,21 @@ impl App {
             self.history_ep_window_records.clear();
             self.history_episode_idx = 0;
             self.history_ep_window_start = 0;
-            self.history_ep_window_end   = 0;
+            self.history_ep_window_end = 0;
 
             // Use cached episode list if fresh
             if let Some(ref cached) = entry.episodes_cache {
                 if !entry.episodes_cache_stale() {
                     self.history_episode_list = cached.clone();
-                    self.history_episode_idx  = self.last_watched_episode_idx();
+                    self.history_episode_idx = self.last_watched_episode_idx();
                     // Synchronously load the initial window
                     let ep_count = self.history_episode_list.len();
-                    let idx      = self.history_episode_idx;
-                    let start    = idx.saturating_sub(40);
-                    let end      = (idx + 40).min(ep_count);
+                    let idx = self.history_episode_idx;
+                    let start = idx.saturating_sub(40);
+                    let end = (idx + 40).min(ep_count);
                     let anime_id = entry.id.clone();
-                    let window_eps: Vec<&str> = self.history_episode_list
+                    let window_eps: Vec<&str> = self
+                        .history_episode_list
                         .get(start..end)
                         .unwrap_or(&[])
                         .iter()
@@ -638,9 +865,10 @@ impl App {
                         .collect();
                     if let Ok(recs) = self.db.load_episodes_in(&anime_id, &window_eps) {
                         self.history_ep_window_start = start;
-                        self.history_ep_window_end   = end;
+                        self.history_ep_window_end = end;
                         for rec in recs {
-                            self.history_ep_window_records.insert(rec.episode_number.clone(), rec);
+                            self.history_ep_window_records
+                                .insert(rec.episode_number.clone(), rec);
                         }
                     }
                     return;
@@ -649,12 +877,14 @@ impl App {
         }
 
         // Need fresh data from API
-        if self.history_episodes_loading { return; }
+        if self.history_episodes_loading {
+            return;
+        }
         self.history_episodes_loading = true;
 
-        let tx       = self.msg_tx.clone();
+        let tx = self.msg_tx.clone();
         let anime_id = entry.id.clone();
-        let mode     = self.stream_mode.clone();
+        let mode = self.stream_mode.clone();
 
         tokio::spawn(async move {
             match player::fetch_episode_list(&anime_id, &mode).await {
@@ -670,10 +900,15 @@ impl App {
 
     /// Index into history_episode_list for the last watched episode (from progress field).
     fn last_watched_episode_idx(&self) -> usize {
-        let Some(entry) = self.history_selected() else { return 0 };
-        let Some(progress) = entry.progress else { return 0 };
+        let Some(entry) = self.history_selected() else {
+            return 0;
+        };
+        let Some(progress) = entry.progress else {
+            return 0;
+        };
         let target = progress.to_string();
-        let raw = self.history_episode_list
+        let raw = self
+            .history_episode_list
             .iter()
             .position(|ep| ep == &target)
             .unwrap_or(0);
@@ -686,34 +921,43 @@ impl App {
     /// Only triggers a DB fetch if the current window doesn't cover idx + 10-row buffer.
     pub fn load_episode_window(&mut self) {
         let ep_count = self.history_episode_list.len();
-        if ep_count == 0 { return; }
+        if ep_count == 0 {
+            return;
+        }
 
-        let Some(entry) = self.history_selected().cloned() else { return };
+        let Some(entry) = self.history_selected().cloned() else {
+            return;
+        };
 
         let idx = self.history_episode_idx;
         let desired_start = idx.saturating_sub(40);
-        let desired_end   = (idx + 40).min(ep_count);
+        let desired_end = (idx + 40).min(ep_count);
 
         // Check if the current window already covers the desired range + 10 buffer
         let cur_start = self.history_ep_window_start;
-        let cur_end   = self.history_ep_window_end;
+        let cur_end = self.history_ep_window_end;
 
         let needs_slide = self.history_ep_window_records.is_empty()
             || desired_start < cur_start.saturating_sub(10)
-            || desired_end   > cur_end + 10;
+            || desired_end > cur_end + 10;
 
-        if !needs_slide { return; }
+        if !needs_slide {
+            return;
+        }
 
         // Collect the episode strings for the window
-        let window_eps: Vec<String> = self.history_episode_list
+        let window_eps: Vec<String> = self
+            .history_episode_list
             .get(desired_start..desired_end)
             .unwrap_or(&[])
             .to_vec();
 
-        if window_eps.is_empty() { return; }
+        if window_eps.is_empty() {
+            return;
+        }
 
-        let tx       = self.msg_tx.clone();
-        let db       = self.db.clone();
+        let tx = self.msg_tx.clone();
+        let db = self.db.clone();
         let anime_id = entry.id.clone();
 
         tokio::spawn(async move {
@@ -723,11 +967,13 @@ impl App {
                     let _ = tx.send(AppMsg::EpisodeWindowLoaded {
                         anime_id,
                         start: desired_start,
-                        end:   desired_end,
+                        end: desired_end,
                         records,
                     });
                 }
-                Err(e) => { let _ = tx.send(AppMsg::Error(format!("ep window: {e}"))); }
+                Err(e) => {
+                    let _ = tx.send(AppMsg::Error(format!("ep window: {e}")));
+                }
             }
         });
     }
@@ -761,11 +1007,15 @@ impl App {
     /// Prefetch cover images for results[start..end] that aren't already cached.
     fn prefetch_images(&self, start: usize, end: usize) {
         for item in self.results.get(start..end).unwrap_or(&[]) {
-            let Some(url) = item.cover_url().map(String::from) else { continue };
+            let Some(url) = item.cover_url().map(String::from) else {
+                continue;
+            };
             let item_id = item.id().to_string();
 
             // Skip if already decoded
-            if self.rgba_cache.contains_key(&item_id) { continue; }
+            if self.rgba_cache.contains_key(&item_id) {
+                continue;
+            }
 
             let tx = self.msg_tx.clone();
 
@@ -774,7 +1024,10 @@ impl App {
                 tokio::spawn(async move {
                     if let Ok(img) = image::load_from_memory(&cached_bytes) {
                         let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
-                        let _ = tx.send(AppMsg::ImageDecoded { id: item_id, image: dyn_img });
+                        let _ = tx.send(AppMsg::ImageDecoded {
+                            id: item_id,
+                            image: dyn_img,
+                        });
                     }
                 });
             } else {
@@ -787,21 +1040,27 @@ impl App {
                         .build().unwrap_or_default();
                     for attempt in 0..2u8 {
                         match client.get(&url).header("Accept", "image/*").send().await {
-                            Ok(r) if r.status().is_success() => {
-                                match r.bytes().await {
-                                    Ok(b) => {
-                                        let bytes = b.to_vec();
-                                        let _ = tx.send(AppMsg::ImageFetched { url: url.clone(), item_id: item_id.clone(), bytes: bytes.clone() });
-                                        if let Ok(img) = image::load_from_memory(&bytes) {
-                                            let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
-                                            let _ = tx.send(AppMsg::ImageDecoded { id: item_id, image: dyn_img });
-                                        }
-                                        return;
+                            Ok(r) if r.status().is_success() => match r.bytes().await {
+                                Ok(b) => {
+                                    let bytes = b.to_vec();
+                                    let _ = tx.send(AppMsg::ImageFetched {
+                                        url: url.clone(),
+                                        item_id: item_id.clone(),
+                                        bytes: bytes.clone(),
+                                    });
+                                    if let Ok(img) = image::load_from_memory(&bytes) {
+                                        let dyn_img =
+                                            image::DynamicImage::ImageRgba8(img.into_rgba8());
+                                        let _ = tx.send(AppMsg::ImageDecoded {
+                                            id: item_id,
+                                            image: dyn_img,
+                                        });
                                     }
-                                    Err(_) if attempt == 0 => continue,
-                                    Err(_) => return,
+                                    return;
                                 }
-                            }
+                                Err(_) if attempt == 0 => continue,
+                                Err(_) => return,
+                            },
                             Ok(_) if attempt == 0 => continue,
                             _ => return,
                         }
@@ -817,10 +1076,15 @@ impl App {
         for item in self.results.get(start..end).unwrap_or(&[]) {
             let ContentItem::Anime(a) = item;
             let id = a.id.clone();
-            if self.detail_cache.get(&id).and_then(|c| c.episode_list.as_ref()).is_some() {
+            if self
+                .detail_cache
+                .get(&id)
+                .and_then(|c| c.episode_list.as_ref())
+                .is_some()
+            {
                 continue; // already cached
             }
-            let tx  = self.msg_tx.clone();
+            let tx = self.msg_tx.clone();
             let mode = mode.clone();
             tokio::spawn(async move {
                 if let Ok(eps) = player::fetch_episode_list(&id, &mode).await {
@@ -852,9 +1116,12 @@ impl App {
         }
 
         // Global: '/' jumps to search bar — not from Search, History panes, or Settings
-        if key.code == KeyCode::Char('/') && self.focus != Focus::Search
-            && self.focus != Focus::History && self.focus != Focus::HistoryDetail
-            && self.focus != Focus::SettingsList && self.focus != Focus::SettingsEdit
+        if key.code == KeyCode::Char('/')
+            && self.focus != Focus::Search
+            && self.focus != Focus::History
+            && self.focus != Focus::HistoryDetail
+            && self.focus != Focus::SettingsList
+            && self.focus != Focus::SettingsEdit
         {
             self.focus = Focus::Search;
             self.search_cursor = self.search_input.len();
@@ -874,57 +1141,81 @@ impl App {
             match key.code {
                 KeyCode::Up => {
                     self.focus = match &self.focus {
-                        Focus::EpisodePrompt   => Focus::Detail,
-                        Focus::Results         => Focus::Search,
-                        Focus::Detail          => Focus::Search,
-                        Focus::Search          => Focus::Search,
-                        Focus::History         => Focus::History,
-                        Focus::HistoryDetail   => Focus::HistoryDetail,
+                        Focus::EpisodePrompt => Focus::Detail,
+                        Focus::Results => Focus::Search,
+                        Focus::Detail => Focus::Search,
+                        Focus::Search => Focus::Search,
+                        Focus::History => Focus::History,
+                        Focus::HistoryDetail => Focus::HistoryDetail,
                         Focus::HistoryEpisodes => Focus::HistoryEpisodes,
-                        Focus::SettingsList    => Focus::SettingsList,
-                        Focus::SettingsEdit    => Focus::SettingsEdit,
+                        Focus::SettingsList => Focus::SettingsList,
+                        Focus::SettingsEdit => Focus::SettingsEdit,
                     };
                     return Ok(false);
                 }
                 KeyCode::Down => {
                     self.focus = match &self.focus {
-                        Focus::Search   => { if !self.results.is_empty() { Focus::Results } else { Focus::Search } }
-                        Focus::Results  => { if self.selected.is_some() { Focus::EpisodePrompt } else { Focus::Results } }
-                        Focus::Detail   => { if self.selected.is_some() { Focus::EpisodePrompt } else { Focus::Detail } }
-                        Focus::EpisodePrompt   => Focus::EpisodePrompt,
-                        Focus::History         => Focus::History,
-                        Focus::HistoryDetail   => Focus::HistoryEpisodes,
+                        Focus::Search => {
+                            if !self.results.is_empty() {
+                                Focus::Results
+                            } else {
+                                Focus::Search
+                            }
+                        }
+                        Focus::Results => {
+                            if self.selected.is_some() {
+                                Focus::EpisodePrompt
+                            } else {
+                                Focus::Results
+                            }
+                        }
+                        Focus::Detail => {
+                            if self.selected.is_some() {
+                                Focus::EpisodePrompt
+                            } else {
+                                Focus::Detail
+                            }
+                        }
+                        Focus::EpisodePrompt => Focus::EpisodePrompt,
+                        Focus::History => Focus::History,
+                        Focus::HistoryDetail => Focus::HistoryEpisodes,
                         Focus::HistoryEpisodes => Focus::HistoryEpisodes,
-                        Focus::SettingsList    => Focus::SettingsList,
-                        Focus::SettingsEdit    => Focus::SettingsEdit,
+                        Focus::SettingsList => Focus::SettingsList,
+                        Focus::SettingsEdit => Focus::SettingsEdit,
                     };
                     return Ok(false);
                 }
                 KeyCode::Right => {
                     self.focus = match &self.focus {
-                        Focus::Results         => { if self.selected.is_some() { Focus::Detail } else { Focus::Results } }
-                        Focus::Detail          => Focus::Detail,
-                        Focus::EpisodePrompt   => Focus::EpisodePrompt,
-                        Focus::Search          => Focus::Search,
-                        Focus::History         => Focus::HistoryDetail,
-                        Focus::HistoryDetail   => Focus::HistoryEpisodes,
+                        Focus::Results => {
+                            if self.selected.is_some() {
+                                Focus::Detail
+                            } else {
+                                Focus::Results
+                            }
+                        }
+                        Focus::Detail => Focus::Detail,
+                        Focus::EpisodePrompt => Focus::EpisodePrompt,
+                        Focus::Search => Focus::Search,
+                        Focus::History => Focus::HistoryDetail,
+                        Focus::HistoryDetail => Focus::HistoryEpisodes,
                         Focus::HistoryEpisodes => Focus::HistoryEpisodes,
-                        Focus::SettingsList    => Focus::SettingsEdit,
-                        Focus::SettingsEdit    => Focus::SettingsEdit,
+                        Focus::SettingsList => Focus::SettingsEdit,
+                        Focus::SettingsEdit => Focus::SettingsEdit,
                     };
                     return Ok(false);
                 }
                 KeyCode::Left => {
                     self.focus = match &self.focus {
-                        Focus::Detail          => Focus::Results,
-                        Focus::EpisodePrompt   => Focus::Results,
-                        Focus::Results         => Focus::Results,
-                        Focus::Search          => Focus::Search,
-                        Focus::History         => Focus::History,
-                        Focus::HistoryDetail   => Focus::History,
+                        Focus::Detail => Focus::Results,
+                        Focus::EpisodePrompt => Focus::Results,
+                        Focus::Results => Focus::Results,
+                        Focus::Search => Focus::Search,
+                        Focus::History => Focus::History,
+                        Focus::HistoryDetail => Focus::History,
                         Focus::HistoryEpisodes => Focus::HistoryDetail,
-                        Focus::SettingsList    => Focus::SettingsList,
-                        Focus::SettingsEdit    => Focus::SettingsList,
+                        Focus::SettingsList => Focus::SettingsList,
+                        Focus::SettingsEdit => Focus::SettingsList,
                     };
                     return Ok(false);
                 }
@@ -934,24 +1225,36 @@ impl App {
 
         // Tab switching — F1..F5
         match key.code {
-            KeyCode::F(1) => { self.switch_tab(Tab::Anime);    return Ok(false); }
-            KeyCode::F(2) => { self.switch_tab(Tab::History);  return Ok(false); }
-            KeyCode::F(3) => { self.switch_tab(Tab::Settings); return Ok(false); }
+            KeyCode::F(1) => {
+                self.switch_tab(Tab::Anime);
+                return Ok(false);
+            }
+            KeyCode::F(2) => {
+                self.switch_tab(Tab::History);
+                return Ok(false);
+            }
+            KeyCode::F(3) => {
+                self.switch_tab(Tab::Settings);
+                return Ok(false);
+            }
             _ => {}
         }
 
         if key.code == KeyCode::Enter {
-            crate::api::allanime::skip_log(&format!("[nexus-skip] Enter pressed at focus={:?}", self.focus));
+            crate::api::allanime::skip_log(&format!(
+                "[nexus-skip] Enter pressed at focus={:?}",
+                self.focus
+            ));
         }
         match self.focus.clone() {
-            Focus::Search          => self.key_search(key).await?,
-            Focus::Results         => self.key_results(key).await?,
-            Focus::Detail          => self.key_detail(key).await?,
-            Focus::History         => self.key_history(key).await?,
-            Focus::HistoryDetail   => self.key_history_detail(key).await?,
+            Focus::Search => self.key_search(key).await?,
+            Focus::Results => self.key_results(key).await?,
+            Focus::Detail => self.key_detail(key).await?,
+            Focus::History => self.key_history(key).await?,
+            Focus::HistoryDetail => self.key_history_detail(key).await?,
             Focus::HistoryEpisodes => self.key_history_episodes(key).await?,
             Focus::SettingsList | Focus::SettingsEdit => self.key_settings(key).await?,
-            Focus::EpisodePrompt   => self.key_episode_prompt(key).await?,
+            Focus::EpisodePrompt => self.key_episode_prompt(key).await?,
         }
         Ok(false)
     }
@@ -973,10 +1276,22 @@ impl App {
                     self.search_input.remove(self.search_cursor);
                 }
             }
-            KeyCode::Left  => { if self.search_cursor > 0 { self.search_cursor -= 1; } }
-            KeyCode::Right => { if self.search_cursor < self.search_input.len() { self.search_cursor += 1; } }
-            KeyCode::Home  => { self.search_cursor = 0; }
-            KeyCode::End   => { self.search_cursor = self.search_input.len(); }
+            KeyCode::Left => {
+                if self.search_cursor > 0 {
+                    self.search_cursor -= 1;
+                }
+            }
+            KeyCode::Right => {
+                if self.search_cursor < self.search_input.len() {
+                    self.search_cursor += 1;
+                }
+            }
+            KeyCode::Home => {
+                self.search_cursor = 0;
+            }
+            KeyCode::End => {
+                self.search_cursor = self.search_input.len();
+            }
             KeyCode::Enter => {
                 let query = self.search_input.trim().to_string();
                 if query.is_empty() {
@@ -991,7 +1306,9 @@ impl App {
             }
             // ↓ / Tab / Esc — move to results if they exist, otherwise stay
             KeyCode::Down | KeyCode::Tab | KeyCode::Esc => {
-                if !self.results.is_empty() { self.focus = Focus::Results; }
+                if !self.results.is_empty() {
+                    self.focus = Focus::Results;
+                }
             }
             _ => {}
         }
@@ -1000,7 +1317,7 @@ impl App {
 
     async fn key_results(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
-            KeyCode::Up   | KeyCode::Char('k') => self.results_up(),
+            KeyCode::Up | KeyCode::Char('k') => self.results_up(),
             KeyCode::Down | KeyCode::Char('j') => self.results_down().await,
 
             // gg → go to top
@@ -1023,8 +1340,12 @@ impl App {
             KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
                 self.focus = Focus::Detail;
             }
-            KeyCode::Tab => { self.focus = Focus::Search; }
-            KeyCode::Char('p') => { self.resolve_and_play().await; }
+            KeyCode::Tab => {
+                self.focus = Focus::Search;
+            }
+            KeyCode::Char('p') => {
+                self.resolve_and_play().await;
+            }
 
             // Ctrl+N → load next page
             KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -1039,18 +1360,30 @@ impl App {
 
     async fn key_detail(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
-            KeyCode::Up   | KeyCode::Char('k') => { self.detail_scroll = self.detail_scroll.saturating_sub(1); }
-            KeyCode::Down | KeyCode::Char('j') => { self.detail_scroll += 1; }
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.detail_scroll = self.detail_scroll.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.detail_scroll += 1;
+            }
             KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.detail_scroll = self.detail_scroll.saturating_sub(10);
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.detail_scroll += 10;
             }
-            KeyCode::PageUp   => { self.detail_scroll = self.detail_scroll.saturating_sub(10); }
-            KeyCode::PageDown => { self.detail_scroll += 10; }
-            KeyCode::Char('p') => { self.resolve_and_play().await; }
-            KeyCode::Left | KeyCode::Esc => { self.focus = Focus::Results; }
+            KeyCode::PageUp => {
+                self.detail_scroll = self.detail_scroll.saturating_sub(10);
+            }
+            KeyCode::PageDown => {
+                self.detail_scroll += 10;
+            }
+            KeyCode::Char('p') => {
+                self.resolve_and_play().await;
+            }
+            KeyCode::Left | KeyCode::Esc => {
+                self.focus = Focus::Results;
+            }
             _ => {}
         }
         Ok(())
@@ -1133,7 +1466,7 @@ impl App {
                         self.history_ep_window_records.clear();
                         self.history_episode_idx = 0;
                         self.history_ep_window_start = 0;
-                        self.history_ep_window_end   = 0;
+                        self.history_ep_window_end = 0;
                         self.history_episodes_loading = false;
                         self.rebuild_history_filter();
                         let new_len = if self.history_filter.is_empty() {
@@ -1186,7 +1519,9 @@ impl App {
 
     async fn key_history_detail(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
-            KeyCode::Left | KeyCode::Esc => { self.focus = Focus::History; }
+            KeyCode::Left | KeyCode::Esc => {
+                self.focus = Focus::History;
+            }
             KeyCode::Right | KeyCode::Char('l') => {
                 if !self.history_episode_list.is_empty() {
                     self.focus = Focus::HistoryEpisodes;
@@ -1219,7 +1554,7 @@ impl App {
 
     async fn key_history_episodes(&mut self, key: KeyEvent) -> Result<()> {
         let ep_count = self.history_episode_list.len();
-        let cols     = self.history_ep_cols.max(1);
+        let cols = self.history_ep_cols.max(1);
         match key.code {
             KeyCode::Left | KeyCode::Char('h') => {
                 // Move left within row, or exit to detail pane if already at col 0
@@ -1229,7 +1564,9 @@ impl App {
                     self.history_episode_idx -= 1;
                 }
             }
-            KeyCode::Esc => { self.focus = Focus::HistoryDetail; }
+            KeyCode::Esc => {
+                self.focus = Focus::HistoryDetail;
+            }
             KeyCode::Right | KeyCode::Char('l') => {
                 if self.history_episode_idx + 1 < ep_count {
                     self.history_episode_idx += 1;
@@ -1246,13 +1583,21 @@ impl App {
             }
             KeyCode::Enter | KeyCode::Char('p') => {
                 // Jump to this episode in the Anime tab — switch tab, search, pre-select episode
-                let Some(entry) = self.history_selected().cloned() else { return Ok(()); };
-                let Some(ep_str) = self.history_episode_list.get(self.history_episode_idx).cloned()
-                    else { return Ok(()); };
+                let Some(entry) = self.history_selected().cloned() else {
+                    return Ok(());
+                };
+                let Some(ep_str) = self
+                    .history_episode_list
+                    .get(self.history_episode_idx)
+                    .cloned()
+                else {
+                    return Ok(());
+                };
 
                 // Get resume position from DB
                 let ep_record = self.db.get_episode(&entry.id, &ep_str).ok().flatten();
-                let raw_pos = ep_record.as_ref()
+                let raw_pos = ep_record
+                    .as_ref()
                     .filter(|r| !r.fully_watched && r.position_seconds > 5.0)
                     .map(|r| r.position_seconds)
                     .unwrap_or(0.0);
@@ -1260,12 +1605,12 @@ impl App {
 
                 let saved_url = ep_record.and_then(|r| r.stream_url);
 
-                let anime_id  = entry.id.clone();
-                let ep_clone  = ep_str.clone();
-                let tx        = self.msg_tx.clone();
-                let mode      = self.stream_mode.clone();
-                let quality   = self.stream_quality.clone();
-                let db        = self.db.clone();
+                let anime_id = entry.id.clone();
+                let ep_clone = ep_str.clone();
+                let tx = self.msg_tx.clone();
+                let mode = self.stream_mode.clone();
+                let quality = self.stream_quality.clone();
+                let db = self.db.clone();
                 let skip_setting = self.config.player.skip_segments.clone();
                 // Use already-resolved mal_id if available, otherwise try entry title
                 let mal_id_opt = self.mal_id;
@@ -1280,7 +1625,9 @@ impl App {
                     let mid = if mal_id_opt.is_some() {
                         mal_id_opt
                     } else if skip_setting != "none" {
-                        crate::api::allanime::skip_log(&format!("[nexus-skip] resolving MAL ID from title: {entry_title}"));
+                        crate::api::allanime::skip_log(&format!(
+                            "[nexus-skip] resolving MAL ID from title: {entry_title}"
+                        ));
                         crate::api::allanime::resolve_mal_id(&entry_title).await
                     } else {
                         None
@@ -1291,14 +1638,22 @@ impl App {
                     let skip_fut = async {
                         if skip_setting != "none" {
                             if let Some(m) = mid {
-                                crate::api::allanime::skip_log(&format!("[nexus-skip] fetching skip times for mal_id={m} ep={ep_num}"));
+                                crate::api::allanime::skip_log(&format!(
+                                    "[nexus-skip] fetching skip times for mal_id={m} ep={ep_num}"
+                                ));
                                 let r = crate::api::allanime::fetch_skip_times(m, ep_num).await;
-                                crate::api::allanime::skip_log(&format!("[nexus-skip] fetch: intro={} outro={}",
+                                crate::api::allanime::skip_log(&format!(
+                                    "[nexus-skip] fetch: intro={} outro={}",
                                     r.as_ref().map(|t| t.intro.is_some()).unwrap_or(false),
-                                    r.as_ref().map(|t| t.outro.is_some()).unwrap_or(false)));
+                                    r.as_ref().map(|t| t.outro.is_some()).unwrap_or(false)
+                                ));
                                 r
-                            } else { None }
-                        } else { None }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
                     };
 
                     let url_fut = async {
@@ -1314,14 +1669,14 @@ impl App {
                     match url_result {
                         Ok(url) => {
                             let rec = crate::db::history::EpisodeRecord {
-                                anime_id:         anime_id.clone(),
-                                episode_number:   ep_clone.clone(),
-                                stream_url:       Some(url.clone()),
-                                watched:          true,
-                                watch_timestamp:  Some(chrono::Utc::now()),
+                                anime_id: anime_id.clone(),
+                                episode_number: ep_clone.clone(),
+                                stream_url: Some(url.clone()),
+                                watched: true,
+                                watch_timestamp: Some(chrono::Utc::now()),
                                 position_seconds: 0.0,
                                 duration_seconds: 0.0,
-                                fully_watched:    false,
+                                fully_watched: false,
                             };
                             let _ = db.save_episode(&rec);
                             let _ = tx_app.send(AppMsg::LaunchMpv {
@@ -1333,7 +1688,9 @@ impl App {
                                 skip_setting: skip_setting.clone(),
                             });
                         }
-                        Err(e) => { let _ = tx_app.send(AppMsg::Error(e.to_string())); }
+                        Err(e) => {
+                            let _ = tx_app.send(AppMsg::Error(e.to_string()));
+                        }
                     }
                 });
 
@@ -1353,8 +1710,6 @@ impl App {
 
     /// Rebuild history_filtered from history_filter using fuzzy match.
     async fn key_settings(&mut self, key: KeyEvent) -> Result<()> {
-
-
         // ── Text edit mode ────────────────────────────────────────────────────
         if self.settings_editing {
             let is_color_row = self.settings_category == 1 && self.settings_row <= 2;
@@ -1383,7 +1738,9 @@ impl App {
                     } else {
                         let input = self.settings_input.trim().to_string();
                         match (self.settings_category, self.settings_row) {
-                            (0, 3) => { self.config.player.mpv_path = input; }
+                            (0, 3) => {
+                                self.config.player.mpv_path = input;
+                            }
                             (0, 4) => {
                                 self.config.player.extra_args =
                                     input.split_whitespace().map(String::from).collect();
@@ -1395,8 +1752,12 @@ impl App {
                         self.settings_error = None;
                     }
                 }
-                KeyCode::Backspace => { self.settings_input.pop(); }
-                KeyCode::Char(c)   => { self.settings_input.push(c); }
+                KeyCode::Backspace => {
+                    self.settings_input.pop();
+                }
+                KeyCode::Char(c) => {
+                    self.settings_input.push(c);
+                }
                 _ => {}
             }
             return Ok(());
@@ -1405,7 +1766,7 @@ impl App {
         // ── Category list (left pane) ─────────────────────────────────────────
         if self.focus == Focus::SettingsList {
             match key.code {
-                KeyCode::Up   | KeyCode::Char('k') => {
+                KeyCode::Up | KeyCode::Char('k') => {
                     if self.settings_category > 0 {
                         self.settings_category -= 1;
                         self.settings_row = 0;
@@ -1432,10 +1793,12 @@ impl App {
         let max = self.settings_max_rows();
         match key.code {
             // Ctrl+Left or Esc → back to category list
-            KeyCode::Left if {
-                let mods = key.modifiers;
-                mods.contains(crossterm::event::KeyModifiers::CONTROL)
-            } => {
+            KeyCode::Left
+                if {
+                    let mods = key.modifiers;
+                    mods.contains(crossterm::event::KeyModifiers::CONTROL)
+                } =>
+            {
                 self.focus = Focus::SettingsList;
                 self.settings_error = None;
                 return Ok(());
@@ -1444,21 +1807,29 @@ impl App {
                 self.focus = Focus::SettingsList;
                 self.settings_error = None;
             }
-            KeyCode::Up   | KeyCode::Char('k') => {
-                if self.settings_row > 0 { self.settings_row -= 1; }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.settings_row > 0 {
+                    self.settings_row -= 1;
+                }
                 // Sync color cursor when changing rows
                 if self.settings_category == 1 && self.settings_row <= 2 {
                     self.settings_color_sync_idx(self.settings_row);
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if self.settings_row + 1 < max { self.settings_row += 1; }
+                if self.settings_row + 1 < max {
+                    self.settings_row += 1;
+                }
                 if self.settings_category == 1 && self.settings_row <= 2 {
                     self.settings_color_sync_idx(self.settings_row);
                 }
             }
-            KeyCode::Right => { self.settings_cycle(1); }
-            KeyCode::Left  => { self.settings_cycle_back(); }
+            KeyCode::Right => {
+                self.settings_cycle(1);
+            }
+            KeyCode::Left => {
+                self.settings_cycle_back();
+            }
             KeyCode::Delete => {
                 // Delete custom swatch under cursor on theme color rows
                 if self.settings_category == 1 && self.settings_row <= 2 {
@@ -1468,10 +1839,10 @@ impl App {
             KeyCode::Enter => {
                 match (self.settings_category, self.settings_row) {
                     (1, 3) => {
-                        self.config.theme  = crate::config::ThemeConfig::default();
+                        self.config.theme = crate::config::ThemeConfig::default();
                         self.config.player = crate::config::PlayerConfig::default();
-                        self.config.ui     = crate::config::UiConfig::default();
-                        self.stream_mode    = self.config.player.stream_mode.clone();
+                        self.config.ui = crate::config::UiConfig::default();
+                        self.stream_mode = self.config.player.stream_mode.clone();
                         self.stream_quality = self.config.player.quality.clone();
                         self.settings_color_idx = [0, 0, 0];
                         let _ = self.config.save();
@@ -1481,15 +1852,17 @@ impl App {
                         // Enter on [+] cell (already active via color_apply) or jump to [+]
                         let add_idx = self.color_row_len(row).saturating_sub(1);
                         self.settings_color_idx[row] = add_idx;
-                        self.settings_input   = String::new();
+                        self.settings_input = String::new();
                         self.settings_editing = true;
-                        self.settings_error   = None;
+                        self.settings_error = None;
                     }
                     _ if self.settings_is_text_field() => {
                         self.settings_input = self.settings_current_text_value();
                         self.settings_editing = true;
                     }
-                    _ => { self.settings_cycle(1); }
+                    _ => {
+                        self.settings_cycle(1);
+                    }
                 }
             }
             _ => {}
@@ -1499,17 +1872,16 @@ impl App {
 
     fn settings_max_rows(&self) -> usize {
         match self.settings_category {
-            0 => 6,  // audio, quality, skip, resume_offset, mpv_path, extra_args
-            1 => 4,  // accent, progress_bar, complete_bar, reset
-            2 => 3,  // image_protocol, results_limit, episode_cols
+            0 => 6, // audio, quality, skip, resume_offset, mpv_path, extra_args
+            1 => 4, // accent, progress_bar, complete_bar, reset
+            2 => 3, // image_protocol, results_limit, episode_cols
             3 => 1,
             _ => 1,
         }
     }
 
     fn settings_is_text_field(&self) -> bool {
-        matches!((self.settings_category, self.settings_row),
-            (0, 4) | (0, 5))  // mpv_path, extra_args (after skip+offset rows)
+        matches!((self.settings_category, self.settings_row), (0, 4) | (0, 5)) // mpv_path, extra_args (after skip+offset rows)
     }
 
     fn settings_current_text_value(&self) -> String {
@@ -1556,11 +1928,17 @@ impl App {
                 self.config.player.resume_offset_secs = next;
             }
             // Theme: accent color (←/→ moves cursor, Enter/→ on + cell opens input)
-            (1, 0) => { self.settings_color_move(0, step); }
+            (1, 0) => {
+                self.settings_color_move(0, step);
+            }
             // Theme: progress bar color
-            (1, 1) => { self.settings_color_move(1, step); }
+            (1, 1) => {
+                self.settings_color_move(1, step);
+            }
             // Theme: complete bar color
-            (1, 2) => { self.settings_color_move(2, step); }
+            (1, 2) => {
+                self.settings_color_move(2, step);
+            }
             // Theme: reset — Enter/→ triggers reset
             (1, 3) => {
                 // Reset handled in Enter path — cycle does nothing here
@@ -1572,7 +1950,11 @@ impl App {
                     cycle_str(&self.config.ui.image_protocol.clone(), &opts, step).into();
             }
             (2, 1) => {
-                self.config.ui.results_limit = if self.config.ui.results_limit == 25 { 50 } else { 25 };
+                self.config.ui.results_limit = if self.config.ui.results_limit == 25 {
+                    50
+                } else {
+                    25
+                };
             }
             (2, 2) => {
                 let opts = ["auto", "2", "3"];
@@ -1593,15 +1975,22 @@ impl App {
     /// - Clamps result to 0.0 minimum
     /// - If result lands inside the intro range, seeks to just after intro end
     ///   (so the skip logic will fire immediately and push past it anyway)
-    pub fn apply_resume_offset(&self, pos: f64, skip_times: Option<&crate::api::allanime::SkipTimes>) -> f64 {
-        if pos <= 0.0 { return 0.0; }
+    pub fn apply_resume_offset(
+        &self,
+        pos: f64,
+        skip_times: Option<&crate::api::allanime::SkipTimes>,
+    ) -> f64 {
+        if pos <= 0.0 {
+            return 0.0;
+        }
         let offset = self.config.player.resume_offset_secs as f64;
-        let raw    = (pos - offset).max(0.0);
+        let raw = (pos - offset).max(0.0);
 
         // If we'd land inside the intro, start just after intro end so skip fires
         if let Some(st) = skip_times {
             if let Some(ref intro) = st.intro {
-                let skip_intro = matches!(self.config.player.skip_segments.as_str(), "intro" | "both");
+                let skip_intro =
+                    matches!(self.config.player.skip_segments.as_str(), "intro" | "both");
                 if skip_intro && raw >= intro.start && raw < intro.end {
                     return intro.end + 0.5;
                 }
@@ -1660,25 +2049,25 @@ impl App {
         let idx = self.settings_color_idx[row];
         let n_presets = crate::config::COLOR_PRESET_NAMES.len() - 1;
         let n_customs = self.color_customs(row).len();
-        let add_idx   = n_presets + n_customs;
+        let add_idx = n_presets + n_customs;
 
         if idx < n_presets {
             // Preset
             let name = crate::config::COLOR_PRESET_NAMES[idx];
             *self.color_active_mut(row) = name.to_string();
             self.settings_editing = false;
-            self.settings_error   = None;
+            self.settings_error = None;
         } else if idx < add_idx {
             // Custom saved color
             let val = self.color_customs(row)[idx - n_presets].clone();
             *self.color_active_mut(row) = val;
             self.settings_editing = false;
-            self.settings_error   = None;
+            self.settings_error = None;
         } else {
             // [+] add cell — open input
-            self.settings_input   = String::new();
+            self.settings_input = String::new();
             self.settings_editing = true;
-            self.settings_error   = None;
+            self.settings_error = None;
         }
     }
 
@@ -1702,14 +2091,18 @@ impl App {
             if !customs.contains(&input) {
                 customs.push(input.clone());
             }
-            let idx = self.color_customs(row).iter().position(|c| c == &input).unwrap_or(0);
+            let idx = self
+                .color_customs(row)
+                .iter()
+                .position(|c| c == &input)
+                .unwrap_or(0);
             let n_presets = crate::config::COLOR_PRESET_NAMES.len() - 1;
             self.settings_color_idx[row] = n_presets + idx;
             *self.color_active_mut(row) = input;
             self.settings_editing = false;
             self.settings_input.clear();
             self.settings_error = None;
-            let _ = self.config.save();  // persist immediately
+            let _ = self.config.save(); // persist immediately
             true
         } else {
             self.settings_error = Some("✗ invalid — use #rrggbb or r,g,b".into());
@@ -1719,13 +2112,15 @@ impl App {
 
     /// Delete the custom swatch under the cursor (if it is a custom swatch).
     fn settings_color_delete(&mut self, row: usize) {
-        let idx       = self.settings_color_idx[row];
+        let idx = self.settings_color_idx[row];
         let n_presets = crate::config::COLOR_PRESET_NAMES.len() - 1;
         let n_customs = self.color_customs(row).len();
-        if idx < n_presets || idx >= n_presets + n_customs { return; } // not a custom
+        if idx < n_presets || idx >= n_presets + n_customs {
+            return;
+        } // not a custom
 
         let custom_idx = idx - n_presets;
-        let deleted    = self.color_customs_mut(row).remove(custom_idx);
+        let deleted = self.color_customs_mut(row).remove(custom_idx);
 
         // If the deleted color was the active one, fall back to first preset
         if self.color_active_mut(row) == &deleted {
@@ -1738,16 +2133,18 @@ impl App {
         if self.settings_color_idx[row] >= new_len {
             self.settings_color_idx[row] = new_len.saturating_sub(1);
         }
-        let _ = self.config.save();  // persist immediately
+        let _ = self.config.save(); // persist immediately
     }
 
     /// Sync cursor position to match the current active color.
     pub fn settings_color_sync_idx(&mut self, row: usize) {
-        let active    = self.color_active_mut(row).clone();
+        let active = self.color_active_mut(row).clone();
         let n_presets = crate::config::COLOR_PRESET_NAMES.len() - 1;
         // Check presets
         if let Some(i) = crate::config::COLOR_PRESET_NAMES[..n_presets]
-            .iter().position(|&n| n == active) {
+            .iter()
+            .position(|&n| n == active)
+        {
             self.settings_color_idx[row] = i;
             return;
         }
@@ -1771,7 +2168,10 @@ impl App {
             return;
         }
         let needle: Vec<char> = self.history_filter.to_lowercase().chars().collect();
-        self.history_filtered = self.history.iter().enumerate()
+        self.history_filtered = self
+            .history
+            .iter()
+            .enumerate()
             .filter(|(_, e)| fuzzy_match(&e.title.to_lowercase(), &needle))
             .map(|(i, _)| i)
             .collect();
@@ -1782,7 +2182,8 @@ impl App {
         if self.history_filter.is_empty() {
             self.history.get(self.history_idx)
         } else {
-            self.history_filtered.get(self.history_idx)
+            self.history_filtered
+                .get(self.history_idx)
                 .and_then(|&i| self.history.get(i))
         }
     }
@@ -1805,7 +2206,7 @@ impl App {
 
             // Prefetch images 2-3 positions ahead of current
             let ahead_start = self.results_idx + 1;
-            let ahead_end   = (self.results_idx + 3).min(self.results.len());
+            let ahead_end = (self.results_idx + 3).min(self.results.len());
             if ahead_start < ahead_end {
                 self.prefetch_images(ahead_start, ahead_end);
             }
@@ -1824,8 +2225,8 @@ impl App {
     pub fn switch_tab(&mut self, tab: Tab) {
         // Save config when leaving Settings
         if self.active_tab == Tab::Settings && tab != Tab::Settings {
-            self.config.player.stream_mode   = self.stream_mode.clone();
-            self.config.player.quality       = self.stream_quality.clone();
+            self.config.player.stream_mode = self.stream_mode.clone();
+            self.config.player.quality = self.stream_quality.clone();
             let _ = self.config.save();
         }
 
@@ -1834,36 +2235,41 @@ impl App {
             self.prev_tab = self.active_tab.clone();
         }
 
-        self.active_tab  = tab.clone();
+        self.active_tab = tab.clone();
 
         if tab == Tab::Settings {
             self.focus = Focus::SettingsList;
             self.settings_editing = false;
-            self.settings_error   = None;
-            self.status = "Settings  •  [jk] navigate  [←→] change  [Enter] edit  [F1-F2] other tabs".into();
+            self.settings_error = None;
+            self.status =
+                "Settings  •  [jk] navigate  [←→] change  [Enter] edit  [F1-F2] other tabs".into();
             return;
         }
 
         self.results.clear();
-        self.selected    = None;
+        self.selected = None;
         self.cover_protocol = None;
         self.episode_list.clear();
         self.anime_episode_records.clear();
         self.search_input.clear();
         self.search_cursor = 0;
         self.current_page = 1;
-        self.has_more    = false;
+        self.has_more = false;
         self.history_filter.clear();
         self.history_filtered.clear();
         self.history_cover = None;
         self.history_cover_id = None;
         self.history_episode_list.clear();
         self.history_ep_window_records.clear();
-        self.history_episode_idx      = 0;
-        self.history_ep_window_start  = 0;
-        self.history_ep_window_end    = 0;
+        self.history_episode_idx = 0;
+        self.history_ep_window_start = 0;
+        self.history_ep_window_end = 0;
         self.history_episodes_loading = false;
-        self.focus = if tab == Tab::History { Focus::History } else { Focus::Search };
+        self.focus = if tab == Tab::History {
+            Focus::History
+        } else {
+            Focus::Search
+        };
         self.history_searching = false;
         self.status = format!("{tab}  •  type to search");
     }
@@ -1872,30 +2278,33 @@ impl App {
 
     async fn do_search(&mut self, page: u32) {
         let query = self.search_input.trim().to_string();
-        if query.is_empty() { return; }
+        if query.is_empty() {
+            return;
+        }
 
-        self.is_searching  = true;
-        self.current_page  = page;
-        self.search_gen   += 1;
-        let gen            = self.search_gen;
+        self.is_searching = true;
+        self.current_page = page;
+        self.search_gen += 1;
+        let gen = self.search_gen;
 
         if page == 1 {
             self.results.clear();
-            self.selected    = None;
+            self.selected = None;
             self.status = format!("Searching \"{query}\"…");
         } else {
             self.status = format!("Loading page {page}…");
         }
 
-        let tx  = self.msg_tx.clone();
+        let tx = self.msg_tx.clone();
         let tab = self.active_tab.clone();
         let mode = self.stream_mode.clone();
 
         tokio::spawn(async move {
             let res: anyhow::Result<Vec<ContentItem>> = match tab {
-                Tab::Anime   => allanime::search_allanime(&query, &mode).await
-                                    .map(|v| v.into_iter().map(ContentItem::Anime).collect()),
-                Tab::History  => Ok(vec![]),
+                Tab::Anime => allanime::search_allanime(&query, &mode)
+                    .await
+                    .map(|v| v.into_iter().map(ContentItem::Anime).collect()),
+                Tab::History => Ok(vec![]),
                 Tab::Settings => Ok(vec![]),
             };
             match res {
@@ -1906,7 +2315,9 @@ impl App {
                         let _ = tx.send(AppMsg::MoreResults(items));
                     }
                 }
-                Err(e) => { let _ = tx.send(AppMsg::Error(e.to_string())); }
+                Err(e) => {
+                    let _ = tx.send(AppMsg::Error(e.to_string()));
+                }
             }
         });
     }
@@ -1918,7 +2329,7 @@ impl App {
     // ── Detail ────────────────────────────────────────────────────────────────
 
     fn load_detail(&mut self, item: ContentItem) {
-        let item_id    = item.id().to_string();
+        let item_id = item.id().to_string();
         let item_title = item.title().to_string();
 
         // ── Cover image ───────────────────────────────────────────────────────
@@ -1961,22 +2372,34 @@ impl App {
                                         });
                                         // Also decode immediately for this item
                                         if let Ok(img) = image::load_from_memory(&bytes) {
-                                            let dyn_img = image::DynamicImage::ImageRgba8(img.into_rgba8());
-                                            let _ = tx.send(AppMsg::ImageDecoded { id, image: dyn_img });
+                                            let dyn_img =
+                                                image::DynamicImage::ImageRgba8(img.into_rgba8());
+                                            let _ = tx
+                                                .send(AppMsg::ImageDecoded { id, image: dyn_img });
                                         }
                                         return;
                                     }
                                     Err(_) if attempt == 0 => continue,
-                                    Err(e) => { let _ = tx.send(AppMsg::Error(format!("Image bytes: {e}"))); return; }
+                                    Err(e) => {
+                                        let _ = tx.send(AppMsg::Error(format!("Image bytes: {e}")));
+                                        return;
+                                    }
                                 }
                             }
                             Ok(_) if attempt == 0 => continue,
-                            Ok(r) => { let _ = tx.send(AppMsg::Error(format!("Image HTTP {}", r.status()))); return; }
+                            Ok(r) => {
+                                let _ =
+                                    tx.send(AppMsg::Error(format!("Image HTTP {}", r.status())));
+                                return;
+                            }
                             Err(_) if attempt == 0 => {
                                 tokio::time::sleep(Duration::from_millis(500)).await;
                                 continue;
                             }
-                            Err(e) => { let _ = tx.send(AppMsg::Error(format!("Image fetch: {e}"))); return; }
+                            Err(e) => {
+                                let _ = tx.send(AppMsg::Error(format!("Image fetch: {e}")));
+                                return;
+                            }
                         }
                     }
                 });
@@ -1996,8 +2419,8 @@ impl App {
 
             // Episode list (Anime only)
             if matches!(item, ContentItem::Anime(_)) {
-                let tx4  = self.msg_tx.clone();
-                let id4  = item_id.clone();
+                let tx4 = self.msg_tx.clone();
+                let id4 = item_id.clone();
                 let mode = self.stream_mode.clone();
                 tokio::spawn(async move {
                     if let Ok(eps) = player::fetch_episode_list(&id4, &mode).await {
@@ -2011,23 +2434,28 @@ impl App {
 
         // ── Load per-episode progress from DB ────────────────────────────────
         self.anime_episode_records.clear();
-        let db  = self.db.clone();
-        let tx  = self.msg_tx.clone();
+        let db = self.db.clone();
+        let tx = self.msg_tx.clone();
         let aid = item_id.clone();
         tokio::spawn(async move {
             if let Ok(recs) = db.load_episodes(&aid) {
                 if !recs.is_empty() {
-                    let _ = tx.send(AppMsg::AnimeEpisodeRecords { anime_id: aid, records: recs });
+                    let _ = tx.send(AppMsg::AnimeEpisodeRecords {
+                        anime_id: aid,
+                        records: recs,
+                    });
                 }
             }
         });
 
         // ── Resolve MAL ID for AniSkip (async, best-effort) ──────────────────
         self.mal_id = None;
-        let tx2    = self.msg_tx.clone();
-        let title  = item_title.clone();
+        let tx2 = self.msg_tx.clone();
+        let title = item_title.clone();
         tokio::spawn(async move {
-            crate::api::allanime::skip_log(&format!("[nexus-skip] resolving MAL ID for title: {title}"));
+            crate::api::allanime::skip_log(&format!(
+                "[nexus-skip] resolving MAL ID for title: {title}"
+            ));
             let id = crate::api::allanime::resolve_mal_id(&title).await;
             crate::api::allanime::skip_log(&format!("[nexus-skip] MAL ID resolved: {id:?}"));
             let _ = tx2.send(AppMsg::MalIdResolved(id));
@@ -2037,7 +2465,10 @@ impl App {
     // ── Playback ──────────────────────────────────────────────────────────────
 
     pub async fn resolve_and_play(&mut self) {
-        crate::api::allanime::skip_log(&format!("[nexus-skip] resolve_and_play called, selected={}", self.selected.is_some()));
+        crate::api::allanime::skip_log(&format!(
+            "[nexus-skip] resolve_and_play called, selected={}",
+            self.selected.is_some()
+        ));
         if self.selected.is_none() {
             self.toast_info("Select something first");
             return;
@@ -2049,7 +2480,7 @@ impl App {
 
     async fn key_episode_prompt(&mut self, key: KeyEvent) -> Result<()> {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let cols  = self.episode_cols.max(1);
+        let cols = self.episode_cols.max(1);
 
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
@@ -2059,7 +2490,8 @@ impl App {
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                let next = (self.episode_list_idx + cols).min(self.episode_list.len().saturating_sub(1));
+                let next =
+                    (self.episode_list_idx + cols).min(self.episode_list.len().saturating_sub(1));
                 self.episode_list_idx = next;
                 if let Some(ep) = self.episode_list.get(self.episode_list_idx) {
                     self.episode_input = ep.clone();
@@ -2104,26 +2536,30 @@ impl App {
                 self.stream_quality = match self.stream_quality.as_str() {
                     "best" => "1080".to_string(),
                     "1080" => "720".to_string(),
-                    "720"  => "480".to_string(),
-                    _      => "best".to_string(),
+                    "720" => "480".to_string(),
+                    _ => "best".to_string(),
                 };
             }
             KeyCode::Enter => {
                 let ep_str = self.episode_input.trim().to_string();
                 let ep: u32 = ep_str.parse().unwrap_or(1);
-                crate::api::allanime::skip_log(&format!("[nexus-skip] Enter pressed: ep={ep} ep_str={ep_str} selected={}", self.selected.is_some()));
+                crate::api::allanime::skip_log(&format!(
+                    "[nexus-skip] Enter pressed: ep={ep} ep_str={ep_str} selected={}",
+                    self.selected.is_some()
+                ));
                 self.focus = Focus::Detail;
                 if let Some(item) = self.selected.clone() {
-                    let tx   = self.msg_tx.clone();
-                    let db   = self.db.clone();
-                    let mode    = self.stream_mode.clone();
+                    let tx = self.msg_tx.clone();
+                    let db = self.db.clone();
+                    let mode = self.stream_mode.clone();
                     let quality = self.stream_quality.clone();
                     let id = match &item {
                         ContentItem::Anime(a) => a.id.clone(),
                     };
 
                     // Look up resume position from cached episode records
-                    let raw_pos = self.anime_episode_records
+                    let raw_pos = self
+                        .anime_episode_records
                         .get(&ep_str)
                         .filter(|r| !r.fully_watched && r.position_seconds > 5.0)
                         .map(|r| r.position_seconds)
@@ -2141,22 +2577,28 @@ impl App {
                     // Fetch skip times AND stream URL together in one spawn
                     // so both are ready before LaunchMpv fires — no race condition
                     let skip_setting = self.config.player.skip_segments.clone();
-                    let mal_id_opt   = self.mal_id;
+                    let mal_id_opt = self.mal_id;
                     crate::api::allanime::skip_log(&format!("[nexus-skip] Spawning: skip_setting={skip_setting} mal_id={mal_id_opt:?} ep={ep}"));
 
                     tokio::spawn(async move {
                         let skip_fut = async {
                             if skip_setting != "none" {
                                 if let Some(mid) = mal_id_opt {
-                                    crate::api::allanime::skip_log(&format!("[nexus-skip] fetching skip times for mal_id={mid} ep={ep}"));
-                                    let result = crate::api::allanime::fetch_skip_times(mid, ep).await;
-                                    crate::api::allanime::skip_log(&format!("[nexus-skip] fetch result: intro={} outro={}",
+                                    crate::api::allanime::skip_log(&format!(
+                                        "[nexus-skip] fetching skip times for mal_id={mid} ep={ep}"
+                                    ));
+                                    let result =
+                                        crate::api::allanime::fetch_skip_times(mid, ep).await;
+                                    crate::api::allanime::skip_log(&format!(
+                                        "[nexus-skip] fetch result: intro={} outro={}",
                                         result.as_ref().map(|t| t.intro.is_some()).unwrap_or(false),
-                                        result.as_ref().map(|t| t.outro.is_some()).unwrap_or(false)),
-                                    );
+                                        result.as_ref().map(|t| t.outro.is_some()).unwrap_or(false)
+                                    ));
                                     result
                                 } else {
-                                    crate::api::allanime::skip_log("[nexus-skip] no MAL ID — cannot fetch skip times");
+                                    crate::api::allanime::skip_log(
+                                        "[nexus-skip] no MAL ID — cannot fetch skip times",
+                                    );
                                     None
                                 }
                             } else {
@@ -2165,10 +2607,8 @@ impl App {
                             }
                         };
 
-                        let (stream_result, skip_times) = tokio::join!(
-                            player::stream_anime(&id, ep, &mode, &quality),
-                            skip_fut,
-                        );
+                        let (stream_result, skip_times) =
+                            tokio::join!(player::stream_anime(&id, ep, &mode, &quality), skip_fut,);
 
                         match stream_result {
                             Ok(url) => {
@@ -2177,14 +2617,14 @@ impl App {
                                 let _ = db.save(&entry);
                                 // Save episode record
                                 let rec = crate::db::history::EpisodeRecord {
-                                    anime_id:         entry.id.clone(),
-                                    episode_number:   ep.to_string(),
-                                    stream_url:       Some(url.clone()),
-                                    watched:          true,
-                                    watch_timestamp:  Some(chrono::Utc::now()),
+                                    anime_id: entry.id.clone(),
+                                    episode_number: ep.to_string(),
+                                    stream_url: Some(url.clone()),
+                                    watched: true,
+                                    watch_timestamp: Some(chrono::Utc::now()),
                                     position_seconds: 0.0,
                                     duration_seconds: 0.0,
-                                    fully_watched:    false,
+                                    fully_watched: false,
                                 };
                                 let _ = db.save_episode(&rec);
                                 let ep_num = ep;
@@ -2192,18 +2632,22 @@ impl App {
                                 let _ = tx.send(AppMsg::LaunchMpv {
                                     url,
                                     anime_id: entry.id,
-                                    episode:  ep.to_string(),
+                                    episode: ep.to_string(),
                                     resume_from,
                                     skip_times,
                                     skip_setting,
                                 });
                             }
-                            Err(e) => { let _ = tx.send(AppMsg::Error(e.to_string())); }
+                            Err(e) => {
+                                let _ = tx.send(AppMsg::Error(e.to_string()));
+                            }
                         }
                     });
                 }
             }
-            KeyCode::Esc => { self.focus = Focus::Detail; }
+            KeyCode::Esc => {
+                self.focus = Focus::Detail;
+            }
             _ => {}
         }
         Ok(())
@@ -2222,7 +2666,9 @@ impl App {
     }
     fn push_toast(&mut self, t: Toast) {
         self.toasts.push(t);
-        if self.toasts.len() > 4 { self.toasts.remove(0); }
+        if self.toasts.len() > 4 {
+            self.toasts.remove(0);
+        }
     }
 
     pub fn on_resize(&mut self) {
@@ -2238,9 +2684,9 @@ impl App {
 // ── Protocol detection ────────────────────────────────────────────────────────
 
 fn detect_image_protocol() -> ImageProtocol {
-    let term    = std::env::var("TERM").unwrap_or_default();
-    let prog    = std::env::var("TERM_PROGRAM").unwrap_or_default();
-    let kitty   = std::env::var("KITTY_WINDOW_ID").is_ok();
+    let term = std::env::var("TERM").unwrap_or_default();
+    let prog = std::env::var("TERM_PROGRAM").unwrap_or_default();
+    let kitty = std::env::var("KITTY_WINDOW_ID").is_ok();
 
     if kitty || term.contains("kitty") || prog.contains("WezTerm") || prog.contains("iTerm") {
         ImageProtocol::Kitty
@@ -2253,13 +2699,17 @@ fn detect_image_protocol() -> ImageProtocol {
 
 /// Returns true if every char in `needle` appears in `haystack` in order.
 fn fuzzy_match(haystack: &str, needle: &[char]) -> bool {
-    if needle.is_empty() { return true; }
+    if needle.is_empty() {
+        return true;
+    }
     let mut it = haystack.chars();
     let mut ni = 0;
     for c in it.by_ref() {
         if c == needle[ni] {
             ni += 1;
-            if ni == needle.len() { return true; }
+            if ni == needle.len() {
+                return true;
+            }
         }
     }
     false
@@ -2276,7 +2726,9 @@ fn cycle_str<'a>(current: &str, opts: &[&'a str], step: i32) -> &'a str {
 fn cycle_color(current: &str, _names: &[&str], step: i32) -> &'static str {
     // Include Custom so arrow keys can land on it and open the text field
     let presets: &[&str] = crate::config::COLOR_PRESET_NAMES;
-    let idx = presets.iter().position(|&n| n == current)
+    let idx = presets
+        .iter()
+        .position(|&n| n == current)
         .unwrap_or(presets.len() - 1); // non-preset values land on Custom
     let len = presets.len() as i32;
     let new_idx = ((idx as i32 + step).rem_euclid(len)) as usize;

@@ -1,12 +1,12 @@
 [package]
-name = "nexus-tui"
+name = "ani-nexus-tui"
 version = "0.1.0"
 edition = "2021"
 authors = ["you"]
 description = "A blazing-fast TUI for Anime — website feel, terminal speed"
 
 [[bin]]
-name = "nexus"
+name = "ani-nexus"
 path = "src/main.rs"
 
 [dependencies]

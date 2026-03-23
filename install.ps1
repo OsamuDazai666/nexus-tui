@@ -1,5 +1,5 @@
 ﻿# ─────────────────────────────────────────────────────────────────────────────
-# nexus-tui installer — Windows (PowerShell)
+# ani-nexus-tui installer — Windows (PowerShell)
 # Run with: powershell -ExecutionPolicy Bypass -File install.ps1
 # ─────────────────────────────────────────────────────────────────────────────
 $ErrorActionPreference = "Stop"
@@ -15,11 +15,11 @@ trap {
     exit 1
 }
 
-$INSTALL_DIR = Join-Path $env:APPDATA "nexus-tui"
-$BIN_DIR     = Join-Path $env:LOCALAPPDATA "Programs\nexus-tui"
-$REPO_URL    = "https://github.com/OsamuDazai666/nexus-tui.git"
-$EXE         = Join-Path $INSTALL_DIR "target\release\nexus.exe"
-$BIN_EXE     = Join-Path $BIN_DIR "nexus.exe"
+$INSTALL_DIR = Join-Path $env:APPDATA "ani-nexus-tui"
+$BIN_DIR     = Join-Path $env:LOCALAPPDATA "Programs\ani-nexus-tui"
+$REPO_URL    = "https://github.com/OsamuDazai666/ani-nexus-tui.git"
+$EXE         = Join-Path $INSTALL_DIR "target\release\ani-nexus.exe"
+$BIN_EXE     = Join-Path $BIN_DIR "ani-nexus.exe"
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 function Write-Header {
@@ -27,7 +27,7 @@ function Write-Header {
     Write-Host ""
     Write-Host "  " -NoNewline
     Write-Host "◆ " -ForegroundColor Yellow -NoNewline
-    Write-Host "NEXUS-TUI INSTALLER" -ForegroundColor White
+    Write-Host "ANI-NEXUS-TUI INSTALLER" -ForegroundColor White
     Write-Host "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
     Write-Host ""
 }

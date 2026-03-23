@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # ────────────────────────────────────────────────────────────────────────────
-# nexus-tui installer — Linux / macOS
-# Usage: bash <(curl -sSf https://raw.githubusercontent.com/OsamuDazai666/nexus-tui/main/install.sh)
+# ani-nexus-tui installer — Linux / macOS
+# Usage: bash <(curl -sSf https://raw.githubusercontent.com/OsamuDazai666/ani-nexus-tui/main/install.sh)
 # ────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-REPO_URL="https://github.com/OsamuDazai666/nexus-tui.git"
-INSTALL_DIR="${HOME}/.local/share/nexus-tui"
+REPO_URL="https://github.com/OsamuDazai666/ani-nexus-tui.git"
+INSTALL_DIR="${HOME}/.local/share/ani-nexus-tui"
 BIN_DIR="${HOME}/.local/bin"
-BINARY="${INSTALL_DIR}/target/release/nexus"
+BINARY="${INSTALL_DIR}/target/release/ani-nexus"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -16,7 +16,7 @@ CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 println()  { echo -e "$*"; }
-header()   { println "\n  ${YELLOW}◆${RESET} ${BOLD}NEXUS-TUI INSTALLER${RESET}\n  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"; }
+header()   { println "\n  ${YELLOW}◆${RESET} ${BOLD}ANI-NEXUS-TUI INSTALLER${RESET}\n  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"; }
 step()     { println "  ${CYAN}▶${RESET} ${BOLD}${1}${RESET}"; }
 ok()       { println "    ${GREEN}✓${RESET} ${1}"; }
 fail()     { println "    ${RED}✗${RESET} ${1}"; exit 1; }
@@ -169,9 +169,9 @@ println ""
 # ── Install binary ─────────────────────────────────────────────────────────────
 step "Installing binary"
 mkdir -p "$BIN_DIR"
-cp "$BINARY" "${BIN_DIR}/nexus"
-chmod +x "${BIN_DIR}/nexus"
-ok "Installed to ${BIN_DIR}/nexus"
+cp "$BINARY" "${BIN_DIR}/ani-nexus"
+chmod +x "${BIN_DIR}/ani-nexus"
+ok "Installed to ${BIN_DIR}/ani-nexus"
 
 # ── PATH hint ──────────────────────────────────────────────────────────────────
 if [[ ":${PATH}:" != *":${BIN_DIR}:"* ]]; then
@@ -185,5 +185,5 @@ fi
 # ── Done ───────────────────────────────────────────────────────────────────────
 println ""
 sep
-println "  ${YELLOW}◆${RESET} ${BOLD}Done!${RESET}  Run ${CYAN}${BOLD}nexus${RESET} to launch"
+println "  ${YELLOW}◆${RESET} ${BOLD}Done!${RESET}  Run ${CYAN}${BOLD}ani-nexus${RESET} to launch"
 println ""
