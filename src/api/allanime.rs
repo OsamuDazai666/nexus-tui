@@ -172,7 +172,7 @@ pub async fn search_allanime(query: &str, mode: &str) -> Result<Vec<AllAnimeItem
 ///
 /// Episode count is a popularity proxy — long-running, well-rated series rank
 /// above obscure shorts with the same title fragment.
-fn rank_allanime(items: &mut Vec<AllAnimeItem>, query: &str) {
+fn rank_allanime(items: &mut [AllAnimeItem], query: &str) {
     let q = query.to_lowercase();
     items.sort_by(|a, b| {
         score_allanime(b, &q)
@@ -248,7 +248,7 @@ pub async fn resolve_mal_id(title: &str) -> Option<u32> {
     match resp {
         Err(e) => {
             skip_log(&format!("Jikan error: {e}"));
-            return None;
+            None
         }
         Ok(r) => {
             skip_log(&format!("Jikan status: {}", r.status()));

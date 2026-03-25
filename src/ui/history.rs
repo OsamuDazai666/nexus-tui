@@ -844,7 +844,7 @@ fn draw_episode_list(
 
     // ── Scrollbar ─────────────────────────────────────────────────────────────
     if ep_count > visible_cells {
-        let total_rows = (ep_count + cols - 1) / cols;
+        let total_rows = ep_count.div_ceil(cols);
         let scroll_max = total_rows.saturating_sub(visible_rows);
         let pct = if scroll_max > 0 {
             scroll_row as f64 / scroll_max as f64

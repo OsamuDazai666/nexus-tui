@@ -1519,7 +1519,7 @@ impl App {
         match key.code {
             KeyCode::Left | KeyCode::Char('h') => {
                 // Move left within row, or exit to detail pane if already at col 0
-                if self.history_episode_idx % cols == 0 {
+                if self.history_episode_idx.is_multiple_of(cols) {
                     self.focus = Focus::HistoryDetail;
                 } else {
                     self.history_episode_idx -= 1;

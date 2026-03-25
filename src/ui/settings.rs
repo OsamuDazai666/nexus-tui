@@ -659,7 +659,7 @@ fn draw_theme(f: &mut Frame, app: &App, area: Rect, edit: bool, accent: Color) {
     // 2 borders + cells need cell_area width = area.width - 2 (outer border) - label_w
     let cell_area_w = area.width.saturating_sub(2).saturating_sub(label_w);
 
-    for row_idx in 0..3usize {
+    for (row_idx, _) in row_labels.iter().enumerate() {
         let s = sel(row_idx);
 
         // ── Measure how many lines the cells need ──────────────────────────────

@@ -699,8 +699,7 @@ async fn get_episode_url(
         .await?;
 
     let normalized = text
-        .replace('{', "\n")
-        .replace('}', "\n")
+        .replace(['{', '}'], "\n")
         .replace("\\u002F", "/")
         .replace('\\', "");
 
@@ -864,7 +863,7 @@ async fn parse_master_m3u8(
                 .split("RESOLUTION=")
                 .nth(1)
                 .and_then(|s| s.split(',').next())
-                .and_then(|s| s.split('x').last())
+                .and_then(|s| s.split('x').next_back())
                 .map(|h| format!("{h}p"))
                 .unwrap_or_else(|| "unknown".to_string());
         } else if !line.starts_with('#') && !line.is_empty() {
