@@ -33,15 +33,15 @@ pub const C_SCORE: Color = Color::Rgb(255, 200, 0);
 use std::cell::Cell;
 
 thread_local! {
-    static ACCENT_R:   Cell<u8> = Cell::new(255);
-    static ACCENT_G:   Cell<u8> = Cell::new(255);
-    static ACCENT_B:   Cell<u8> = Cell::new(0);
-    static BAR_PROG_R: Cell<u8> = Cell::new(255);
-    static BAR_PROG_G: Cell<u8> = Cell::new(255);
-    static BAR_PROG_B: Cell<u8> = Cell::new(0);
-    static BAR_DONE_R: Cell<u8> = Cell::new(0);
-    static BAR_DONE_G: Cell<u8> = Cell::new(200);
-    static BAR_DONE_B: Cell<u8> = Cell::new(150);
+    static ACCENT_R:   Cell<u8> = const { Cell::new(255) };
+    static ACCENT_G:   Cell<u8> = const { Cell::new(255) };
+    static ACCENT_B:   Cell<u8> = const { Cell::new(0) };
+    static BAR_PROG_R: Cell<u8> = const { Cell::new(255) };
+    static BAR_PROG_G: Cell<u8> = const { Cell::new(255) };
+    static BAR_PROG_B: Cell<u8> = const { Cell::new(0) };
+    static BAR_DONE_R: Cell<u8> = const { Cell::new(0) };
+    static BAR_DONE_G: Cell<u8> = const { Cell::new(200) };
+    static BAR_DONE_B: Cell<u8> = const { Cell::new(150) };
 }
 
 pub fn set_accent(r: u8, g: u8, b: u8) {

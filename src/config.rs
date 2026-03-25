@@ -5,7 +5,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub player: PlayerConfig,
@@ -13,16 +13,6 @@ pub struct Config {
     pub ui: UiConfig,
     #[serde(default)]
     pub theme: ThemeConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            player: PlayerConfig::default(),
-            ui: UiConfig::default(),
-            theme: ThemeConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,10 +83,7 @@ impl Default for ThemeConfig {
 
 impl Config {
     pub fn load() -> Self {
-        match Self::try_load() {
-            Ok(cfg) => cfg,
-            Err(_) => Self::default(),
-        }
+        Self::try_load().unwrap_or_default()
     }
 
     fn try_load() -> Result<Self> {
