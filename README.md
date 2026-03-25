@@ -6,7 +6,7 @@
 
 A blazing-fast, strictly terminal-based UI for **Anime**. Experience website-quality browsing and streaming mechanics directly in your terminal, with absolutely zero browser overhead.
 
-![ani-nexus-tui demo](assets/nexus-demo.gif)
+![ani-nexus-tui demo](assets/ani-nexus-demo.gif)
 
 ---
 
