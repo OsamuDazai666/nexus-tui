@@ -78,7 +78,7 @@ jobs:
         shell: bash
         run: |
           ./scripts/create_homebrew_linux_bottle.sh "${{ steps.tag.outputs.value }}" target/distrib
-          bottle_path="$(find target/distrib -maxdepth 1 -type f -name 'ani-nexus-tui--*.x86_64_linux.bottle.tar.gz' | head -n1)"
+          bottle_path="$(find target/distrib -maxdepth 1 -type f \( -name 'ani-nexus-tui-*.x86_64_linux.bottle.tar.gz' -o -name 'ani-nexus-tui--*.x86_64_linux.bottle.tar.gz' \) | head -n1)"
           if [[ -z "$bottle_path" ]]; then
             echo "Homebrew bottle artifact was not generated" >&2
             exit 1

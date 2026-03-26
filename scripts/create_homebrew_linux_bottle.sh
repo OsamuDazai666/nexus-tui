@@ -13,7 +13,7 @@ version="${tag_or_version#v}"
 formula_name="ani-nexus-tui"
 binary_name="ani-nexus"
 target_archive_name="${formula_name}-x86_64-unknown-linux-gnu.tar.xz"
-bottle_name="${formula_name}--${version}.x86_64_linux.bottle.tar.gz"
+bottle_name="${formula_name}-${version}.x86_64_linux.bottle.tar.gz"
 
 archive_path="$(find "$artifacts_dir" -maxdepth 1 -type f -name "$target_archive_name" | head -n1 || true)"
 if [[ -z "$archive_path" ]]; then
