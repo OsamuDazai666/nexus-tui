@@ -13,6 +13,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: homebrew-bottle-${{ github.event.release.tag_name || inputs.release_tag }}
+  cancel-in-progress: false
+
 jobs:
   bottle-and-dispatch:
     runs-on: ubuntu-latest
@@ -32,6 +36,29 @@ jobs:
             exit 1
           fi
           echo "value=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.tag.outputs.value }}"
+          repo="${{ github.repository }}"
+          max_attempts=20
+          sleep_seconds=15
+
+          for attempt in $(seq 1 "$max_attempts"); do
+            if gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name' 2>/dev/null | grep -q '^ani-nexus-tui-x86_64-unknown-linux-gnu.tar.xz$'; then
+              echo "Release assets are ready for $tag"
+              exit 0
+            fi
+            echo "Waiting for release assets for $tag (attempt $attempt/$max_attempts)"
+            sleep "$sleep_seconds"
+          done
+
+          echo "Timed out waiting for release assets for $tag" >&2
+          exit 1
 
       - name: Download Linux dist archive from release
         env:
