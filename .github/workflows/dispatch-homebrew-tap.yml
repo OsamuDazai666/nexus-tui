@@ -1,8 +1,6 @@
 name: Dispatch Homebrew Tap Update
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -18,10 +16,14 @@ jobs:
         env:
           TAP_REPO: ${{ secrets.HOMEBREW_TAP_REPO }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           if [[ -z "${TAP_REPO}" || -z "${TAP_TOKEN}" ]]; then
             echo "Missing required secrets: HOMEBREW_TAP_REPO and/or HOMEBREW_TAP_TOKEN"
+            exit 1
+          fi
+          if [[ -z "${RELEASE_TAG}" ]]; then
+            echo "Missing release tag input"
             exit 1
           fi
 
