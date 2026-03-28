@@ -2,7 +2,7 @@ param(
     [switch]$FromSource,
     [switch]$Offline,
     [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$PassThruArgs
+    [string[]]$PassThruArgs = @()
 )
 
 $ErrorActionPreference = "Stop"

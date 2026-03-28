@@ -43,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/OsamuDazai666/ani-nexus-tui/main/in
 Open PowerShell and execute:
 
 ```powershell
-irm https://raw.githubusercontent.com/OsamuDazai666/ani-nexus-tui/main/install.ps1 | iex
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/OsamuDazai666/ani-nexus-tui/main/install.ps1 | iex"
 ```
 
 ### Compile from Source
