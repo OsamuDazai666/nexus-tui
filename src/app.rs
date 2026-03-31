@@ -198,6 +198,9 @@ pub struct App {
     pub history_ep_window_end: usize,
     pub history_ep_cols: usize,
     pub history_ep_window_records: std::collections::HashMap<String, EpisodeRecord>,
+    /// Tracks which anime's episode list is currently loaded — avoids false
+    /// "switch" detection when window records are empty (no watched eps in range).
+    pub history_ep_anime_id: Option<String>,
 
     // Episode prompt + playback options
     pub episode_input: String,
@@ -301,6 +304,7 @@ impl App {
             history_ep_window_end: 0,
             history_ep_cols: 2,
             history_ep_window_records: std::collections::HashMap::new(),
+            history_ep_anime_id: None,
             episode_input: String::new(),
             episode_cursor: 0,
             episode_list: Vec::new(),
@@ -543,6 +547,7 @@ impl App {
                     .unwrap_or(false)
                 {
                     self.history_episode_list = eps;
+                    self.history_ep_anime_id = Some(anime_id.clone());
                     self.history_episodes_loading = false;
                     self.history_ep_window_start = 0;
                     self.history_ep_window_end = 0;
@@ -868,16 +873,15 @@ impl App {
                 self.history_episode_idx = 0;
                 self.history_ep_window_start = 0;
                 self.history_ep_window_end = 0;
+                self.history_ep_anime_id = None;
             }
             return;
         };
 
-        // Detect which anime is currently loaded in the window
-        let loaded_id = self
-            .history_ep_window_records
-            .values()
-            .next()
-            .map(|r| r.anime_id.clone());
+        // Detect which anime is currently loaded — use the explicit tracking field
+        // instead of inferring from window records (which can be empty when the
+        // user scrolls into a range with no watched episodes).
+        let loaded_id = self.history_ep_anime_id.clone();
 
         // If we already have a fresh list for this entry, nothing to do
         let already_loaded = !self.history_episode_list.is_empty()
@@ -895,11 +899,13 @@ impl App {
             self.history_episode_idx = 0;
             self.history_ep_window_start = 0;
             self.history_ep_window_end = 0;
+            self.history_ep_anime_id = None;
 
             // Use cached episode list if fresh
             if let Some(ref cached) = entry.episodes_cache {
                 if !entry.episodes_cache_stale(&self.stream_mode) {
                     self.history_episode_list = cached.clone();
+                    self.history_ep_anime_id = Some(entry.id.clone());
                     self.history_episode_idx = self.last_watched_episode_idx();
                     // Synchronously load the initial window
                     let ep_count = self.history_episode_list.len();
@@ -1519,6 +1525,7 @@ impl App {
                         self.history_ep_window_start = 0;
                         self.history_ep_window_end = 0;
                         self.history_episodes_loading = false;
+                        self.history_ep_anime_id = None;
                         self.rebuild_history_filter();
                         let new_len = if self.history_filter.is_empty() {
                             self.history.len()
@@ -1593,6 +1600,7 @@ impl App {
                         self.history_cover_id = None;
                         self.history_episode_list.clear();
                         self.history_ep_window_records.clear();
+                        self.history_ep_anime_id = None;
                         self.rebuild_history_filter();
                         self.focus = Focus::History;
                     }
@@ -1771,6 +1779,7 @@ impl App {
                     self.history_episode_idx = 0;
                     self.history_ep_window_start = 0;
                     self.history_ep_window_end = 0;
+                    self.history_ep_anime_id = None;
                     self.history_episodes_loading = true;
 
                     let tx = self.msg_tx.clone();
@@ -2355,6 +2364,7 @@ impl App {
         self.history_cover_id = None;
         self.history_episode_list.clear();
         self.history_ep_window_records.clear();
+        self.history_ep_anime_id = None;
         self.history_episode_idx = 0;
         self.history_ep_window_start = 0;
         self.history_ep_window_end = 0;

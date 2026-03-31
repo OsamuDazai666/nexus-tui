@@ -189,8 +189,13 @@ pub fn draw_episode_grid(f: &mut Frame, app: &mut App, area: Rect) {
     );
 
     // Episode grid
-    let cols_per_row = ((rows[1].width as usize).saturating_sub(2)) / 8;
-    let cols_per_row = cols_per_row.max(4);
+    // Dynamic cell width — adapts to the longest episode number so 4+ digit
+    // episodes (e.g. One Piece 1000+) keep the grid aligned.
+    let max_ep_len = app.episode_list.iter().map(|e| e.len()).max().unwrap_or(1).max(3);
+    let cell_w: usize = max_ep_len + 2; // e.g. " 1000 " = 6 for 4-digit eps
+    let cell_slot = cell_w + 1; // cell + 1-char gap
+    let cols_per_row = ((rows[1].width as usize).saturating_sub(2)) / cell_slot;
+    let cols_per_row = cols_per_row.max(1);
     // Sync to app so the key handler uses the exact same column count as the rendered grid
     app.episode_cols = cols_per_row;
 
@@ -225,9 +230,7 @@ pub fn draw_episode_grid(f: &mut Frame, app: &mut App, area: Rect) {
                     }
                 });
 
-                // Cell is " 123 " = 5 chars wide
-                let cell_w = 5usize;
-                let ep_display = format!(" {:>3} ", ep);
+                let ep_display = format!(" {:>width$} ", ep, width = max_ep_len);
 
                 // Fill color: ≥90% → teal (watched), <90% → yellow (in-progress)
                 // Each has a normal shade and a brighter shade for when selected
@@ -327,8 +330,19 @@ pub fn draw_episode_grid(f: &mut Frame, app: &mut App, area: Rect) {
         }
     }
 
+    // Scroll to keep the selected episode visible
+    let visible_rows = rows[1].height as usize;
+    let selected_row = app.episode_list_idx / cols_per_row;
+    let scroll = if visible_rows > 0 && selected_row >= visible_rows {
+        (selected_row - visible_rows + 1) as u16
+    } else {
+        0u16
+    };
+
     f.render_widget(
-        Paragraph::new(grid_lines).style(Style::default().bg(C_PANEL)),
+        Paragraph::new(grid_lines)
+            .style(Style::default().bg(C_PANEL))
+            .scroll((scroll, 0)),
         rows[1],
     );
 
