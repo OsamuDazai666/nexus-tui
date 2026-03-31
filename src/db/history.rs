@@ -27,22 +27,21 @@ pub struct HistoryEntry {
     pub total_watch_seconds: i64,
     pub progress: Option<u32>, // last watched episode number
     pub total: Option<u32>,    // total episodes
+    pub status: Option<String>, // anime airing status ("Finished", "Releasing", etc.)
 
     // Episode list cache
     pub episodes_cache: Option<Vec<String>>,
     pub episodes_cache_updated_at: Option<DateTime<Utc>>,
+    pub episodes_cache_mode: Option<String>, // "sub" or "dub"
 }
 
 impl HistoryEntry {
     pub fn from_content(item: &ContentItem) -> Self {
-        let total = match item {
+        let (total, status) = match item {
             ContentItem::Anime(a) => {
                 let eps = a.total_episodes();
-                if eps > 0 {
-                    Some(eps)
-                } else {
-                    None
-                }
+                let t = if eps > 0 { Some(eps) } else { None };
+                (t, a.status.clone())
             }
         };
         Self {
@@ -57,8 +56,10 @@ impl HistoryEntry {
             total_watch_seconds: 0,
             progress: None,
             total,
+            status,
             episodes_cache: None,
             episodes_cache_updated_at: None,
+            episodes_cache_mode: None,
         }
     }
 
@@ -76,11 +77,28 @@ impl HistoryEntry {
         format!("{}{}", "█".repeat(filled), "░".repeat(empty))
     }
 
-    /// True if the episode cache is missing or older than 24 hours.
-    pub fn episodes_cache_stale(&self) -> bool {
+    /// True if the episode cache is missing, too old, or was fetched for a
+    /// different stream mode (sub/dub).
+    ///
+    /// Cache lifetime depends on anime status:
+    /// - Finished/completed anime: 7 days (episode counts are stable)
+    /// - Ongoing/releasing anime: 6 hours (new eps or dub releases may appear)
+    /// - Unknown status: 24 hours
+    pub fn episodes_cache_stale(&self, current_mode: &str) -> bool {
         match self.episodes_cache_updated_at {
             None => true,
-            Some(t) => (Utc::now() - t).num_hours() >= 24,
+            Some(t) => {
+                if self.episodes_cache_mode.as_deref() != Some(current_mode) {
+                    return true;
+                }
+                let age = Utc::now() - t;
+                let max_age_hours = match self.status.as_deref() {
+                    Some("Finished") | Some("Completed") => 7 * 24, // 7 days
+                    Some("Releasing") | Some("Ongoing") | Some("Not Yet Aired") => 6, // 6 hours
+                    _ => 24, // default
+                };
+                age.num_hours() >= max_age_hours
+            }
         }
     }
 }
@@ -137,7 +155,9 @@ impl HistoryStore {
                 progress                  INTEGER,           -- last watched ep number
                 total                     INTEGER,           -- total episodes
                 episodes_cache            TEXT,              -- JSON array of ep strings
-                episodes_cache_updated_at INTEGER            -- unix timestamp
+                episodes_cache_updated_at INTEGER,           -- unix timestamp
+                episodes_cache_mode       TEXT,              -- 'sub' or 'dub'
+                status                    TEXT               -- airing status ('Finished', 'Releasing', etc.)
             );
 
             CREATE TABLE IF NOT EXISTS episodes (
@@ -156,6 +176,13 @@ impl HistoryStore {
             CREATE INDEX IF NOT EXISTS idx_episodes_anime     ON episodes(anime_id);
         ",
         )?;
+        // Add columns for existing databases (no-op if column already exists)
+        let _ = conn.execute_batch(
+            "ALTER TABLE anime ADD COLUMN episodes_cache_mode TEXT",
+        );
+        let _ = conn.execute_batch(
+            "ALTER TABLE anime ADD COLUMN status TEXT",
+        );
         Ok(())
     }
 
@@ -167,15 +194,16 @@ impl HistoryStore {
             "INSERT INTO anime
                (id, title, media_type, cover_url, last_watched, play_count,
                 user_rating, notes, total_watch_seconds, progress, total,
-                episodes_cache, episodes_cache_updated_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)
+                episodes_cache, episodes_cache_updated_at, episodes_cache_mode, status)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
              ON CONFLICT(id) DO UPDATE SET
                title                     = excluded.title,
                cover_url                 = excluded.cover_url,
                last_watched              = excluded.last_watched,
                play_count                = anime.play_count + 1,
                total                     = coalesce(excluded.total, anime.total),
-               progress                  = coalesce(excluded.progress, anime.progress)",
+               progress                  = coalesce(excluded.progress, anime.progress),
+               status                    = coalesce(excluded.status, anime.status)",
             params![
                 entry.id,
                 entry.title,
@@ -193,6 +221,8 @@ impl HistoryStore {
                     .as_ref()
                     .map(|v| serde_json::to_string(v).unwrap_or_default()),
                 entry.episodes_cache_updated_at.map(|t| t.timestamp()),
+                entry.episodes_cache_mode,
+                entry.status,
             ],
         )?;
         Ok(())
@@ -213,13 +243,16 @@ impl HistoryStore {
         Ok(())
     }
 
-    /// Store the fetched episode list and mark cache timestamp.
-    pub fn save_episodes_cache(&self, id: &str, episodes: &[String]) -> Result<()> {
+    /// Store the fetched episode list and mark cache timestamp + mode.
+    /// Also updates `total` to reflect the actual episode count for this mode
+    /// (sub and dub counts often differ — dubs lag by ~1 week).
+    pub fn save_episodes_cache(&self, id: &str, episodes: &[String], mode: &str) -> Result<()> {
         let json = serde_json::to_string(episodes)?;
+        let total = episodes.len() as i64;
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "UPDATE anime SET episodes_cache = ?1, episodes_cache_updated_at = ?2 WHERE id = ?3",
-            params![json, Utc::now().timestamp(), id],
+            "UPDATE anime SET episodes_cache = ?1, episodes_cache_updated_at = ?2, episodes_cache_mode = ?3, total = ?4 WHERE id = ?5",
+            params![json, Utc::now().timestamp(), mode, total, id],
         )?;
         Ok(())
     }
@@ -229,7 +262,7 @@ impl HistoryStore {
         let mut stmt = conn.prepare(
             "SELECT id, title, media_type, cover_url, last_watched, play_count,
                     user_rating, notes, total_watch_seconds, progress, total,
-                    episodes_cache, episodes_cache_updated_at
+                    episodes_cache, episodes_cache_updated_at, episodes_cache_mode, status
              FROM anime ORDER BY last_watched DESC",
         )?;
 
@@ -245,7 +278,7 @@ impl HistoryStore {
         let mut stmt = conn.prepare(
             "SELECT id, title, media_type, cover_url, last_watched, play_count,
                     user_rating, notes, total_watch_seconds, progress, total,
-                    episodes_cache, episodes_cache_updated_at
+                    episodes_cache, episodes_cache_updated_at, episodes_cache_mode, status
              FROM anime WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_entry)?;
@@ -385,8 +418,10 @@ impl HistoryStore {
 
 fn row_to_entry(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> {
     let ts: i64 = row.get(4)?;
-    let cache_ts: Option<i64> = row.get(12)?;
     let cache_json: Option<String> = row.get(11)?;
+    let cache_ts: Option<i64> = row.get(12)?;
+    let cache_mode: Option<String> = row.get(13)?;
+    let status: Option<String> = row.get(14)?;
 
     Ok(HistoryEntry {
         id: row.get(0)?,
@@ -400,8 +435,10 @@ fn row_to_entry(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> {
         total_watch_seconds: row.get(8)?,
         progress: row.get::<_, Option<i64>>(9)?.map(|v| v as u32),
         total: row.get::<_, Option<i64>>(10)?.map(|v| v as u32),
+        status,
         episodes_cache: cache_json.and_then(|j| serde_json::from_str(&j).ok()),
         episodes_cache_updated_at: cache_ts.and_then(|t| DateTime::from_timestamp(t, 0)),
+        episodes_cache_mode: cache_mode,
     })
 }
 

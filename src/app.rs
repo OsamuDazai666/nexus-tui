@@ -531,7 +531,7 @@ impl App {
             }
 
             AppMsg::HistoryEpisodeList { anime_id, eps } => {
-                let _ = self.db.save_episodes_cache(&anime_id, &eps);
+                let _ = self.db.save_episodes_cache(&anime_id, &eps, &self.stream_mode);
                 if let Ok(Some(updated)) = self.db.get(&anime_id) {
                     if let Some(pos) = self.history.iter().position(|e| e.id == anime_id) {
                         self.history[pos] = updated;
@@ -667,17 +667,107 @@ impl App {
                                 }
                             }
                         }
-                        // Force window reload for the finished anime
-                        if self
+                        self.toast_success("Playback saved");
+
+                        // ── Focus restoration & auto-advance ──
+                        let completion_pct = if duration > 0.0 {
+                            position / duration
+                        } else {
+                            0.0
+                        };
+
+                        // Anime tab: restore focus to episode grid and auto-advance
+                        if self.active_tab == Tab::Anime
+                            && (self.focus == Focus::EpisodePrompt
+                                || self.focus == Focus::Detail)
+                        {
+                            self.focus = Focus::EpisodePrompt;
+                            if completion_pct > 0.9 {
+                                // Advance to next episode
+                                if let Some(idx) =
+                                    self.episode_list.iter().position(|e| *e == episode)
+                                {
+                                    if idx + 1 < self.episode_list.len() {
+                                        self.episode_list_idx = idx + 1;
+                                        self.episode_input =
+                                            self.episode_list[idx + 1].clone();
+                                        self.episode_cursor = self.episode_input.len();
+                                    }
+                                }
+                            } else if let Some(idx) =
+                                self.episode_list.iter().position(|e| *e == episode)
+                            {
+                                // Stay on same episode
+                                self.episode_list_idx = idx;
+                                self.episode_input = episode.clone();
+                                self.episode_cursor = self.episode_input.len();
+                            }
+                        }
+
+                        // History tab: keep focus on episode grid and auto-advance.
+                        // Reload the window records synchronously (instead of clearing
+                        // them) so that load_history_episodes() in tick() sees valid
+                        // records for the same anime and doesn't reset the index.
+                        if self.active_tab == Tab::History
+                            && (self.focus == Focus::HistoryEpisodes
+                                || self.focus == Focus::HistoryDetail)
+                        {
+                            self.focus = Focus::HistoryEpisodes;
+                            if completion_pct > 0.9 {
+                                if let Some(idx) = self
+                                    .history_episode_list
+                                    .iter()
+                                    .position(|e| *e == episode)
+                                {
+                                    if idx + 1 < self.history_episode_list.len() {
+                                        self.history_episode_idx = idx + 1;
+                                    }
+                                }
+                            }
+                            // If <= 90%, stay on same episode (no index change needed)
+
+                            // Synchronously reload the episode window around the
+                            // current cursor so records reflect the updated DB state
+                            // without triggering load_history_episodes() to reset idx.
+                            if self
+                                .history_selected()
+                                .map(|e| e.id == anime_id)
+                                .unwrap_or(false)
+                            {
+                                let ep_count = self.history_episode_list.len();
+                                let idx = self.history_episode_idx;
+                                let start = idx.saturating_sub(40);
+                                let end = (idx + 40).min(ep_count);
+                                let window_eps: Vec<&str> = self
+                                    .history_episode_list
+                                    .get(start..end)
+                                    .unwrap_or(&[])
+                                    .iter()
+                                    .map(|s| s.as_str())
+                                    .collect();
+                                self.history_ep_window_records.clear();
+                                if let Ok(recs) =
+                                    self.db.load_episodes_in(&anime_id, &window_eps)
+                                {
+                                    self.history_ep_window_start = start;
+                                    self.history_ep_window_end = end;
+                                    for rec in recs {
+                                        self.history_ep_window_records
+                                            .insert(rec.episode_number.clone(), rec);
+                                    }
+                                }
+                            }
+                        } else if self
                             .history_selected()
                             .map(|e| e.id == anime_id)
                             .unwrap_or(false)
                         {
+                            // Not on the History episodes pane — just clear for lazy
+                            // reload (original behavior).
                             self.history_ep_window_start = 0;
                             self.history_ep_window_end = 0;
                             self.history_ep_window_records.clear();
                         }
-                        self.toast_success("Playback saved");
                     }
                 }
             }
@@ -793,7 +883,7 @@ impl App {
         let already_loaded = !self.history_episode_list.is_empty()
             && loaded_id.as_deref() == Some(entry.id.as_str());
 
-        if already_loaded && !entry.episodes_cache_stale() {
+        if already_loaded && !entry.episodes_cache_stale(&self.stream_mode) {
             return;
         }
 
@@ -808,7 +898,7 @@ impl App {
 
             // Use cached episode list if fresh
             if let Some(ref cached) = entry.episodes_cache {
-                if !entry.episodes_cache_stale() {
+                if !entry.episodes_cache_stale(&self.stream_mode) {
                     self.history_episode_list = cached.clone();
                     self.history_episode_idx = self.last_watched_episode_idx();
                     // Synchronously load the initial window
@@ -1664,6 +1754,55 @@ impl App {
                     }
                 }
             }
+            // Toggle sub/dub with Tab — re-fetch episode list for the new mode
+            KeyCode::Tab => {
+                self.stream_mode = if self.stream_mode == "sub" {
+                    "dub".to_string()
+                } else {
+                    "sub".to_string()
+                };
+                let mode_label = self.stream_mode.to_uppercase();
+                self.toast_info(format!("Switched to {mode_label}"));
+
+                if let Some(entry) = self.history_selected().cloned() {
+                    // Clear current list and show loading state
+                    self.history_episode_list.clear();
+                    self.history_ep_window_records.clear();
+                    self.history_episode_idx = 0;
+                    self.history_ep_window_start = 0;
+                    self.history_ep_window_end = 0;
+                    self.history_episodes_loading = true;
+
+                    let tx = self.msg_tx.clone();
+                    let anime_id = entry.id.clone();
+                    let mode = self.stream_mode.clone();
+
+                    // Use cached data if we have a fresh cache for the new mode
+                    // (e.g. user already loaded this entry, switched and came back)
+                    if let Ok(Some(fresh_entry)) = self.db.get(&anime_id) {
+                        if let Some(ref cached) = fresh_entry.episodes_cache {
+                            if !fresh_entry.episodes_cache_stale(&mode) {
+                                let _ = tx.send(AppMsg::HistoryEpisodeList {
+                                    anime_id,
+                                    eps: cached.clone(),
+                                });
+                                return Ok(());
+                            }
+                        }
+                    }
+
+                    tokio::spawn(async move {
+                        match player::fetch_episode_list(&anime_id, &mode).await {
+                            Ok(eps) => {
+                                let _ = tx.send(AppMsg::HistoryEpisodeList { anime_id, eps });
+                            }
+                            Err(e) => {
+                                let _ = tx.send(AppMsg::Error(format!("Episode list: {e}")));
+                            }
+                        }
+                    });
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -2485,6 +2624,21 @@ impl App {
                 } else {
                     "sub".to_string()
                 };
+                // Re-fetch episode list for the new mode — sub/dub counts often differ
+                if let Some(item) = self.selected.clone() {
+                    let id = item.id().to_string();
+                    // Invalidate cached episode list so revisiting fetches for the new mode
+                    if let Some(c) = self.detail_cache.get_mut(&id) {
+                        c.episode_list = None;
+                    }
+                    let tx = self.msg_tx.clone();
+                    let mode = self.stream_mode.clone();
+                    tokio::spawn(async move {
+                        if let Ok(eps) = player::fetch_episode_list(&id, &mode).await {
+                            let _ = tx.send(AppMsg::EpisodeList { id, eps });
+                        }
+                    });
+                }
             }
             // Cycle quality with Ctrl+Q (was bare 'q' — conflicted with global quit)
             KeyCode::Char('q') if ctrl => {
@@ -2502,7 +2656,7 @@ impl App {
                     "[nexus-skip] Enter pressed: ep={ep} ep_str={ep_str} selected={}",
                     self.selected.is_some()
                 ));
-                self.focus = Focus::Detail;
+                self.focus = Focus::EpisodePrompt;
                 if let Some(item) = self.selected.clone() {
                     let tx = self.msg_tx.clone();
                     let db = self.db.clone();
