@@ -3,6 +3,8 @@ mod app;
 mod browser_auth;
 mod config;
 mod db;
+mod debug_log;
+mod flaresolverr;
 mod player;
 mod ui;
 

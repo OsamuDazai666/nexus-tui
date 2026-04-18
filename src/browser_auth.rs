@@ -5,7 +5,8 @@ use std::env;
 use std::path::PathBuf;
 use tokio::time::{sleep, Duration};
 
-const DEFAULT_WARMUP_URL: &str = "https://api.allanime.day/";
+use crate::debug_log;
+use crate::flaresolverr;
 
 pub async fn fetch_text_with_query(url: &str, query: &[(String, String)]) -> Result<String> {
     let full_url = build_url(url, query);
@@ -13,6 +14,54 @@ pub async fn fetch_text_with_query(url: &str, query: &[(String, String)]) -> Res
 }
 
 pub async fn fetch_text_from_url(url: &str) -> Result<String> {
+    let domain = flaresolverr::extract_domain(url);
+
+    // Tier 1: Try FlareSolverr with session cookies (headless, stealth)
+    let flaresolverr_available = flaresolverr::is_available().await;
+    
+    if flaresolverr_available {
+        // Try with existing session cookies first
+        let cookies = flaresolverr::load_session_cookies(&domain);
+
+        match flaresolverr::fetch_text_with_cookies(url, cookies).await {
+            Ok((body, new_cookies)) => {
+                let is_challenge = looks_like_bot_challenge(&body);
+                if !is_challenge {
+                    let _ = flaresolverr::save_session_cookies(&domain, &new_cookies);
+                    // Extract JSON from HTML wrapper if present
+                    let clean_body = extract_json_from_html(&body);
+                    return Ok(clean_body);
+                }
+                // Challenge still present - cookies expired, try fresh
+                match flaresolverr::fetch_text(url).await {
+                    Ok((body, new_cookies)) => {
+                        if !looks_like_bot_challenge(&body) {
+                            let _ = flaresolverr::save_session_cookies(&domain, &new_cookies);
+                            // Extract JSON from HTML wrapper if present
+                            let clean_body = extract_json_from_html(&body);
+                            return Ok(clean_body);
+                        }
+                    }
+                    Err(_e) => {}
+                }
+            }
+            Err(_e) => {}
+        }
+        
+        // If we get here, FlareSolverr was tried but couldn't solve the challenge
+        return Err(anyhow!(
+            "FlareSolverr could not bypass Cloudflare challenge. Try:\n\
+            1. Update FlareSolverr: docker pull ghcr.io/flaresolverr/flaresolverr:latest\n\
+            2. Wait 5-10 minutes and retry (Cloudflare may have flagged your IP)\n\
+            3. Use a VPN/proxy to change your IP address"
+        ));
+    }
+
+    // Tier 2: Fallback to visible browser (chromiumoxide) - only if FlareSolverr not installed
+    fetch_with_visible_browser(url).await
+}
+
+async fn fetch_with_visible_browser(url: &str) -> Result<String> {
     ensure_gui_session()?;
 
     let profile_dir = browser_profile_dir();
@@ -26,10 +75,14 @@ pub async fn fetch_text_from_url(url: &str) -> Result<String> {
         .args([
             "--disable-gpu",
             "--disable-dev-shm-usage",
-            "--disable-features=TranslateUI",
+            "--disable-features=TranslateUI,BlinkGenPropertyTrees,IsolateOrigins,site-per-process",
             "--no-first-run",
             "--password-store=basic",
             "--lang=en-US",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-web-security",
+            "--disable-features=IsolateOrigins,site-per-process",
+            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         ]);
 
     if let Ok(bin) = env::var("NEXUS_CHROME_BIN") {
@@ -64,10 +117,16 @@ pub async fn fetch_text_from_url(url: &str) -> Result<String> {
 
 async fn fetch_once_or_manual_retry(browser: &Browser, url: &str) -> Result<String> {
     let page = browser.new_page("about:blank").await?;
-    page.goto(DEFAULT_WARMUP_URL).await?;
+    
+    // Hide automation flags
+    let _ = page.evaluate("navigator.webdriver = false; Object.defineProperty(navigator, 'webdriver', {get: () => false});").await;
+    let _ = page.evaluate("window.chrome = { runtime: {} };").await;
+    
+    // Navigate directly to target URL (avoid double navigation)
+    page.goto(url).await?;
     let _ = page.wait_for_navigation().await?;
 
-    let mut body = fetch_page_text(&page, url).await?;
+    let mut body = current_page_text(&page).await?;
     if looks_like_bot_challenge(&body) {
         let wait_secs = std::env::var("NEXUS_BROWSER_AUTH_WAIT_SECS")
             .ok()
@@ -78,19 +137,14 @@ async fn fetch_once_or_manual_retry(browser: &Browser, url: &str) -> Result<Stri
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(2000);
 
-        eprintln!(
-            "nexus: browser auth required on {url}. Complete challenge in opened browser window (up to {wait_secs}s)"
-        );
-
         let deadline = std::time::Instant::now() + Duration::from_secs(wait_secs);
         while std::time::Instant::now() < deadline {
             sleep(Duration::from_millis(poll_ms)).await;
             match current_page_text(&page).await {
                 Ok(text) if !looks_like_bot_challenge(&text) => {
-                    body = fetch_page_text(&page, url).await?;
-                    if !looks_like_bot_challenge(&body) {
-                        break;
-                    }
+                    // Challenge cleared - use current page content without re-navigating
+                    body = text;
+                    break;
                 }
                 _ => {}
             }
@@ -105,12 +159,6 @@ async fn fetch_once_or_manual_retry(browser: &Browser, url: &str) -> Result<Stri
     }
 
     Ok(body)
-}
-
-async fn fetch_page_text(page: &chromiumoxide::Page, url: &str) -> Result<String> {
-    page.goto(url).await?;
-    let _ = page.wait_for_navigation().await?;
-    current_page_text(page).await
 }
 
 async fn current_page_text(page: &chromiumoxide::Page) -> Result<String> {
@@ -142,12 +190,49 @@ fn build_url(base: &str, query: &[(String, String)]) -> String {
 
 fn looks_like_bot_challenge(body: &str) -> bool {
     let low = body.to_ascii_lowercase();
-    low.contains("<html")
-        || low.contains("cloudflare")
-        || low.contains("cf-chl")
+    // Check for Cloudflare challenge indicators (not just <html which is in every page)
+    low.contains("cf-chl")
         || low.contains("captcha")
         || low.contains("attention required")
         || low.contains("/cdn-cgi/challenge-platform")
+        || low.contains("just a moment")
+        || low.contains("verifying you are human")
+        || low.contains("please wait")
+}
+
+/// Extract JSON from HTML wrapper that Cloudflare adds to API responses
+fn extract_json_from_html(body: &str) -> String {
+    // If body doesn't start with <html, it's already clean JSON
+    if !body.trim_start().starts_with("<") {
+        return body.to_string();
+    }
+    
+    // Try to extract content from <pre>...</pre> tags
+    if let Some(start) = body.find("<pre>") {
+        let content_start = start + 5;
+        if let Some(end) = body[content_start..].find("</pre>") {
+            let json_content = &body[content_start..content_start + end];
+            debug_log!("Extracted JSON from <pre> tags: {} bytes", json_content.len());
+            return json_content.to_string();
+        }
+    }
+    
+    // If no <pre> tags found but starts with <html>, try to find JSON after body tag
+    if body.contains("<body>") {
+        if let Some(start) = body.find("<body>") {
+            let after_body = &body[start + 6..];
+            // Trim whitespace and return
+            let trimmed = after_body.trim();
+            if trimmed.ends_with("</body></html>") {
+                let content = &trimmed[..trimmed.len() - "</body></html>".len()];
+                debug_log!("Extracted JSON from <body>: {} bytes", content.len());
+                return content.trim().to_string();
+            }
+        }
+    }
+    
+    // Couldn't extract, return original
+    body.to_string()
 }
 
 fn autodetect_chromium_binary() -> Option<PathBuf> {

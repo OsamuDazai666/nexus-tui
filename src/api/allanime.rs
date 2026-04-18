@@ -3,10 +3,8 @@
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use tokio::time::{sleep, Duration};
 
 const ALLANIME_API: &str = "https://api.allanime.day/api";
-const ALLANIME_REFR: &str = "https://allmanga.to";
 const AGENT: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0";
 
@@ -130,83 +128,19 @@ pub async fn search_allanime(query: &str, mode: &str) -> Result<Vec<AllAnimeItem
         mode
     );
 
-    let client = reqwest::Client::builder()
-        .emulation(wreq_util::Emulation::Chrome140)
-        .user_agent(AGENT)
-        .timeout(std::time::Duration::from_secs(15))
-        .default_headers({
-            let mut h = reqwest::header::HeaderMap::new();
-            h.insert(
-                "Referer",
-                reqwest::header::HeaderValue::from_static(ALLANIME_REFR),
-            );
-            h
-        })
-        .build()
-        .unwrap_or_default();
+    // Use browser_auth which handles FlareSolverr -> visible browser fallback chain
+    let text = crate::browser_auth::fetch_text_with_query(
+        ALLANIME_API,
+        &[
+            ("variables".to_string(), vars),
+            ("query".to_string(), gql.to_string()),
+        ],
+    )
+    .await
+    .map_err(|e| anyhow!("AllAnime request failed: {e}"))?;
 
-    let mut last_err: Option<anyhow::Error> = None;
-    let mut used_browser_fallback = false;
-    let mut text = String::new();
-    for attempt in 0..3u8 {
-        match client
-            .get(ALLANIME_API)
-            .query(&[("variables", &vars), ("query", &gql.to_string())])
-            .send()
-            .await
-        {
-            Ok(resp) => match resp.text().await {
-                Ok(body) => {
-                    if looks_like_bot_challenge(&body) {
-                        last_err = Some(anyhow!(
-                            "AllAnime returned a bot-check/captcha page instead of JSON"
-                        ));
-                    } else {
-                        text = body;
-                        last_err = None;
-                        break;
-                    }
-                }
-                Err(e) => last_err = Some(anyhow!("AllAnime body read failed: {e}")),
-            },
-            Err(e) => last_err = Some(anyhow!("AllAnime request failed: {e}")),
-        }
-
-        if attempt < 2 {
-            sleep(Duration::from_millis(350 * (attempt as u64 + 1))).await;
-        }
-    }
-
-    if let Some(_e) = last_err {
-        text = crate::browser_auth::fetch_text_with_query(
-            ALLANIME_API,
-            &[
-                ("variables".to_string(), vars.clone()),
-                ("query".to_string(), gql.to_string()),
-            ],
-        )
-        .await
-        .map_err(|e| anyhow!("AllAnime browser fallback failed: {e}"))?;
-        used_browser_fallback = true;
-    }
-
-    let resp: GqlResponse = match serde_json::from_str(&text) {
-        Ok(v) => v,
-        Err(e) if !used_browser_fallback => {
-            let browser_text = crate::browser_auth::fetch_text_with_query(
-                ALLANIME_API,
-                &[
-                    ("variables".to_string(), vars),
-                    ("query".to_string(), gql.to_string()),
-                ],
-            )
-            .await
-            .map_err(|be| anyhow!("AllAnime parse error: {e}; browser fallback failed: {be}"))?;
-            serde_json::from_str(&browser_text)
-                .map_err(|pe| anyhow!("AllAnime parse error after browser fallback: {pe}"))?
-        }
-        Err(e) => return Err(anyhow!("AllAnime parse error: {e}")),
-    };
+    let resp: GqlResponse =
+        serde_json::from_str(&text).map_err(|e| anyhow!("AllAnime parse error: {e}"))?;
 
     let mut items: Vec<AllAnimeItem> = resp
         .data
@@ -281,15 +215,6 @@ fn strip_html(s: &str) -> String {
         .replace("<br>", "\n")
 }
 
-fn looks_like_bot_challenge(body: &str) -> bool {
-    let low = body.to_ascii_lowercase();
-    low.contains("<html")
-        || low.contains("cloudflare")
-        || low.contains("cf-chl")
-        || low.contains("captcha")
-        || low.contains("attention required")
-        || low.contains("/cdn-cgi/challenge-platform")
-}
 // ── MAL ID resolver via AniList ───────────────────────────────────────────────
 
 /// Resolve a MyAnimeList ID for an anime title via AniList's GraphQL API.

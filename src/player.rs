@@ -4,7 +4,6 @@
 use anyhow::{anyhow, bail, Result};
 use std::process::Command;
 use tokio::sync::mpsc;
-use tokio::time::{sleep, Duration};
 
 const ALLANIME_API: &str = "https://api.allanime.day/api";
 const ALLANIME_BASE: &str = "allanime.day";
@@ -651,48 +650,16 @@ async fn episodes_list(show_id: &str, mode: &str) -> Result<Vec<String>> {
     let gql = r#"query ($showId: String!) { show( _id: $showId ) { _id availableEpisodesDetail }}"#;
     let vars = format!(r#"{{"showId":"{}"}}"#, show_id);
 
-    let http = client();
-    let mut last_err: Option<anyhow::Error> = None;
-    let mut text = String::new();
-    for attempt in 0..3u8 {
-        match http
-            .get(ALLANIME_API.to_string())
-            .query(&[("variables", &vars), ("query", &gql.to_string())])
-            .send()
-            .await
-        {
-            Ok(resp) => match resp.text().await {
-                Ok(body) => {
-                    if looks_like_bot_challenge(&body) {
-                        last_err = Some(anyhow!(
-                            "Episode-list request was challenged by Cloudflare/captcha"
-                        ));
-                    } else {
-                        text = body;
-                        last_err = None;
-                        break;
-                    }
-                }
-                Err(e) => last_err = Some(anyhow!("Episode-list body read failed: {e}")),
-            },
-            Err(e) => last_err = Some(anyhow!("Episode-list request failed: {e}")),
-        }
-        if attempt < 2 {
-            sleep(Duration::from_millis(300 * (attempt as u64 + 1))).await;
-        }
-    }
-
-    if let Some(_e) = last_err {
-        text = crate::browser_auth::fetch_text_with_query(
-            ALLANIME_API,
-            &[
-                ("variables".to_string(), vars.clone()),
-                ("query".to_string(), gql.to_string()),
-            ],
-        )
-        .await
-        .map_err(|e| anyhow!("Episode-list browser fallback failed: {e}"))?;
-    }
+    // Use browser_auth which handles FlareSolverr -> visible browser fallback chain
+    let text = crate::browser_auth::fetch_text_with_query(
+        ALLANIME_API,
+        &[
+            ("variables".to_string(), vars),
+            ("query".to_string(), gql.to_string()),
+        ],
+    )
+    .await
+    .map_err(|e| anyhow!("Episode-list request failed: {e}"))?;
 
     let json: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
         anyhow!("Episode-list parse error: {e}. Upstream likely returned non-JSON.")
@@ -728,48 +695,16 @@ async fn get_episode_url(
         id, mode, ep
     );
 
-    let http = client();
-    let mut last_err: Option<anyhow::Error> = None;
-    let mut text = String::new();
-    for attempt in 0..3u8 {
-        match http
-            .get(ALLANIME_API.to_string())
-            .query(&[("variables", &vars), ("query", &gql.to_string())])
-            .send()
-            .await
-        {
-            Ok(resp) => match resp.text().await {
-                Ok(body) => {
-                    if looks_like_bot_challenge(&body) {
-                        last_err = Some(anyhow!(
-                            "Episode-source request was challenged by Cloudflare/captcha"
-                        ));
-                    } else {
-                        text = body;
-                        last_err = None;
-                        break;
-                    }
-                }
-                Err(e) => last_err = Some(anyhow!("Episode-source body read failed: {e}")),
-            },
-            Err(e) => last_err = Some(anyhow!("Episode-source request failed: {e}")),
-        }
-        if attempt < 2 {
-            sleep(Duration::from_millis(300 * (attempt as u64 + 1))).await;
-        }
-    }
-
-    if let Some(_e) = last_err {
-        text = crate::browser_auth::fetch_text_with_query(
-            ALLANIME_API,
-            &[
-                ("variables".to_string(), vars.clone()),
-                ("query".to_string(), gql.to_string()),
-            ],
-        )
-        .await
-        .map_err(|e| anyhow!("Episode-source browser fallback failed: {e}"))?;
-    }
+    // Use browser_auth which handles FlareSolverr -> visible browser fallback chain
+    let text = crate::browser_auth::fetch_text_with_query(
+        ALLANIME_API,
+        &[
+            ("variables".to_string(), vars),
+            ("query".to_string(), gql.to_string()),
+        ],
+    )
+    .await
+    .map_err(|e| anyhow!("Episode-source request failed: {e}"))?;
 
     let mut providers: Vec<(String, String)> = Vec::new();
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
@@ -864,7 +799,7 @@ async fn get_episode_url(
 // ── get_links ─────────────────────────────────────────────────────────────────
 
 async fn get_links(
-    client: &reqwest::Client,
+    _client: &reqwest::Client,
     path: &str,
 ) -> Result<Vec<(String, String, Option<String>)>> {
     let url = if path.starts_with("http") {
@@ -873,15 +808,10 @@ async fn get_links(
         format!("https://{ALLANIME_BASE}{path}")
     };
 
-    let mut response = client.get(&url).send().await?.text().await?;
-    if looks_like_bot_challenge(&response) {
-        response = crate::browser_auth::fetch_text_from_url(&url)
-            .await
-            .map_err(|e| anyhow!("Provider challenge at {url}; browser fallback failed: {e}"))?;
-    }
-    if looks_like_bot_challenge(&response) {
-        bail!("Provider endpoint returned Cloudflare/captcha challenge for {url}");
-    }
+    // Use browser_auth which handles FlareSolverr -> visible browser fallback chain
+    let response = crate::browser_auth::fetch_text_from_url(&url)
+        .await
+        .map_err(|e| anyhow!("Provider request failed for {url}: {e}"))?;
     let separated = response.replace("},{", "\n");
 
     let mut links: Vec<(String, String, Option<String>)> = Vec::new();
@@ -923,7 +853,8 @@ async fn get_links(
         .find(|(_, u, _)| u.contains("master.m3u8"))
         .cloned();
     if let Some((_, master_url, _)) = master_link {
-        if let Ok(m3u8_links) = parse_master_m3u8(client, &master_url, m3u8_refr.as_deref()).await {
+        let c = client();
+        if let Ok(m3u8_links) = parse_master_m3u8(&c, &master_url, m3u8_refr.as_deref()).await {
             if !m3u8_links.is_empty() {
                 links = m3u8_links;
             }
@@ -1034,14 +965,4 @@ fn client() -> reqwest::Client {
         })
         .build()
         .unwrap_or_default()
-}
-
-fn looks_like_bot_challenge(body: &str) -> bool {
-    let low = body.to_ascii_lowercase();
-    low.contains("<html")
-        || low.contains("cloudflare")
-        || low.contains("cf-chl")
-        || low.contains("captcha")
-        || low.contains("attention required")
-        || low.contains("/cdn-cgi/challenge-platform")
 }
