@@ -161,20 +161,6 @@ fn extract_json_from_decrypted(plaintext: &[u8]) -> Option<serde_json::Value> {
     None
 }
 
-fn decipher_hex_pair(hex: &str) -> char {
-    match hex {
-        "79" => 'A', "7a" => 'B', "7b" => 'C', "7c" => 'D', "7d" => 'E', "7e" => 'F', "7f" => 'G',
-        "70" => 'H', "71" => 'I', "72" => 'J', "73" => 'K', "74" => 'L', "75" => 'M', "76" => 'N',
-        "77" => 'O', "68" => 'P', "69" => 'Q', "6a" => 'R', "6b" => 'S', "6c" => 'T', "6d" => 'U',
-        "6e" => 'V', "6f" => 'W', "60" => 'X', "61" => 'Y', "62" => 'Z', "53" => 'a', "54" => 'b',
-        "55" => 'c', "56" => 'd', "57" => 'e', "58" => 'f', "59" => 'g', "5a" => 'h', "5b" => 'i',
-        "5c" => 'j', "5d" => 'k', "5e" => 'l', "5f" => 'm', "50" => 'n', "51" => 'o', "52" => 'p',
-        "43" => 'q', "44" => 'r', "45" => 's', "46" => 't', "47" => 'u', "48" => 'v', "49" => 'w',
-        "4a" => 'x', "4b" => 'y', "4c" => 'z', "0d" => '0', "0e" => '1', "0f" => '2', "10" => '3',
-        "11" => '4', "12" => '5', "13" => '6', "14" => '7', "15" => '8', "16" => '9', "3d" => '=',
-        "2f" => '/', "2b" => '+', "00" => '\0', _ => '?',
-    }
-}
 
 fn hex_decipher(s: &str) -> String {
     let pairs: Vec<&str> = (0..s.len())
@@ -289,7 +275,18 @@ pub async fn stream_anime(
 }
 
 pub async fn fetch_episode_list(show_id: &str, mode: &str) -> Result<Vec<String>> {
-    episodes_list(show_id, mode).await
+    // Wrap with timeout to prevent indefinite hangs on network issues
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        episodes_list(show_id, mode),
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => Err(anyhow!(
+            "Episode list fetch timed out after 15 seconds. Network or API may be slow."
+        )),
+    }
 }
 
 /// Launch mpv with full tracking:
