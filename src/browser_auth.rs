@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use chromiumoxide::browser::{Browser, BrowserConfig};
 use futures_util::StreamExt;
 use std::env;
@@ -233,6 +233,33 @@ fn extract_json_from_html(body: &str) -> String {
     
     // Couldn't extract, return original
     body.to_string()
+}
+
+/// POST JSON request (Cloudflare allows POST but blocks GET with query params)
+pub async fn fetch_post_json(url: &str, body_json: &str) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()?;
+    
+    let resp = client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json")
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
+        .header("Referer", "https://allmanga.to/")
+        .header("Origin", "https://allmanga.to")
+        .body(body_json.to_string())
+        .send()
+        .await?;
+    
+    let text = resp.text().await?;
+    
+    // Check if we got a Cloudflare challenge
+    if looks_like_bot_challenge(&text) {
+        bail!("Cloudflare challenge detected on POST request");
+    }
+    
+    Ok(text)
 }
 
 fn autodetect_chromium_binary() -> Option<PathBuf> {

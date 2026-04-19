@@ -2,6 +2,7 @@
 //! and watch_later-based exact quit-position saving.
 
 use anyhow::{anyhow, bail, Result};
+use base64::Engine;
 use std::process::Command;
 use tokio::sync::mpsc;
 
@@ -33,7 +34,147 @@ pub enum PlaybackEvent {
     },
 }
 
-// ── ani-cli hex cipher ────────────────────────────────────────────────────────
+// ── ani-cli AES-256-CTR decryption for AllAnime ───────────────────────────────
+
+use sha2::{Sha256, Digest};
+use aes::cipher::{KeyIvInit, StreamCipher};
+use ctr::Ctr32BE;
+
+const ALLANIME_SECRET: &str = "SimtVuagFbGR2K7P";
+
+/// Decrypt the base64-encoded `tobeparsed` data using AES-256-CTR.
+/// Robustly handles trailing garbage bytes by finding JSON boundary.
+fn decipher_tobeparsed(encoded: &str) -> Option<serde_json::Value> {
+    // Base64 decode
+    let decoded = match base64::engine::general_purpose::STANDARD.decode(encoded) {
+        Ok(d) => d,
+        Err(e) => {
+            crate::debug_log!("Base64 decode failed: {e}");
+            return None;
+        }
+    };
+
+    if decoded.len() < 12 {
+        crate::debug_log!("Decoded data too short: {} bytes", decoded.len());
+        return None;
+    }
+
+    // Extract IV (first 12 bytes) and ciphertext (remaining bytes)
+    let iv = &decoded[0..12];
+    let ciphertext = &decoded[12..];
+
+    // Derive AES key: SHA-256 of the secret string
+    let mut hasher = Sha256::new();
+    hasher.update(ALLANIME_SECRET.as_bytes());
+    let key = hasher.finalize();
+
+    // Construct 16-byte nonce for AES-256-CTR
+    // Format: 12-byte IV + 4-byte counter starting at 00000002
+    let mut nonce = [0u8; 16];
+    nonce[0..12].copy_from_slice(iv);
+    nonce[12..16].copy_from_slice(&[0x00, 0x00, 0x00, 0x02]);
+
+    // Decrypt using AES-256-CTR
+    let mut cipher = Ctr32BE::<aes::Aes256>::new(&key.into(), &nonce.into());
+    let mut plaintext = ciphertext.to_vec();
+    cipher.apply_keystream(&mut plaintext);
+
+    // Extract valid JSON from potentially corrupted output
+    extract_json_from_decrypted(&plaintext)
+}
+
+/// Extract valid JSON array from decrypted bytes that may contain trailing garbage.
+/// The decrypted data contains valid JSON followed by random bytes (likely auth tags).
+/// Strategy: Scan from the end to find the JSON array boundary, then try parsing.
+fn extract_json_from_decrypted(plaintext: &[u8]) -> Option<serde_json::Value> {
+    // First attempt: try to parse as valid UTF-8 string directly
+    if let Ok(s) = std::str::from_utf8(plaintext) {
+        let trimmed = s.trim();
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            crate::debug_log!("Decrypted JSON parsed successfully (clean)");
+            return Some(v);
+        }
+    }
+
+    // Second attempt: find the JSON boundary by looking for valid UTF-8 prefix
+    // The JSON we expect is an array: [{...}, {...}]
+    // Scan backwards from the end to find a valid closing position
+
+    // The valid JSON ends with something like: "streamerId":"allanime"}]}]}
+    // We look for the pattern: ]}]} or similar valid JSON endings
+
+    for i in (1..=plaintext.len()).rev() {
+        let slice = &plaintext[..i];
+
+        // Quick check: must end with a valid JSON closing character
+        let last_byte = slice.last().copied()?;
+        if !matches!(last_byte, b'}' | b']' | b'"' | b'0'..=b'9') {
+            continue;
+        }
+
+        // Try to parse as UTF-8
+        if let Ok(s) = std::str::from_utf8(slice) {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            // Try to parse as JSON
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                crate::debug_log!("Found valid JSON ending at byte {}/{} (trimmed {} trailing bytes)",
+                    i, plaintext.len(), plaintext.len() - i);
+                return Some(v);
+            }
+        }
+    }
+
+    // Third attempt: aggressive JSON extraction by searching for common patterns
+    // Look for the array structure: starts with [ and contains objects with sourceName
+    if let Some(start) = plaintext.iter().position(|&b| b == b'[') {
+        // Try progressively smaller slices from the end
+        for end in (start + 10..=plaintext.len()).rev() {
+            let candidate = &plaintext[start..end];
+            if let Ok(s) = std::str::from_utf8(candidate) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(s.trim()) {
+                    if v.is_array() {
+                        crate::debug_log!("Extracted JSON array from bytes {}..{}", start, end);
+                        return Some(v);
+                    }
+                }
+            }
+        }
+    }
+
+    // Final fallback: log what we found for debugging
+    let preview_len = plaintext.len().min(200);
+    let valid_prefix_len = plaintext.iter()
+        .position(|&b| b < 0x20 && b != b'\n' && b != b'\r' && b != b'\t')
+        .unwrap_or(plaintext.len());
+
+    crate::debug_log!(
+        "JSON extraction failed. Total: {} bytes, valid UTF-8 prefix: {} bytes, preview: {:?}",
+        plaintext.len(),
+        valid_prefix_len,
+        String::from_utf8_lossy(&plaintext[..preview_len])
+    );
+
+    None
+}
+
+fn decipher_hex_pair(hex: &str) -> char {
+    match hex {
+        "79" => 'A', "7a" => 'B', "7b" => 'C', "7c" => 'D', "7d" => 'E', "7e" => 'F', "7f" => 'G',
+        "70" => 'H', "71" => 'I', "72" => 'J', "73" => 'K', "74" => 'L', "75" => 'M', "76" => 'N',
+        "77" => 'O', "68" => 'P', "69" => 'Q', "6a" => 'R', "6b" => 'S', "6c" => 'T', "6d" => 'U',
+        "6e" => 'V', "6f" => 'W', "60" => 'X', "61" => 'Y', "62" => 'Z', "53" => 'a', "54" => 'b',
+        "55" => 'c', "56" => 'd', "57" => 'e', "58" => 'f', "59" => 'g', "5a" => 'h', "5b" => 'i',
+        "5c" => 'j', "5d" => 'k', "5e" => 'l', "5f" => 'm', "50" => 'n', "51" => 'o', "52" => 'p',
+        "43" => 'q', "44" => 'r', "45" => 's', "46" => 't', "47" => 'u', "48" => 'v', "49" => 'w',
+        "4a" => 'x', "4b" => 'y', "4c" => 'z', "0d" => '0', "0e" => '1', "0f" => '2', "10" => '3',
+        "11" => '4', "12" => '5', "13" => '6', "14" => '7', "15" => '8', "16" => '9', "3d" => '=',
+        "2f" => '/', "2b" => '+', "00" => '\0', _ => '?',
+    }
+}
 
 fn hex_decipher(s: &str) -> String {
     let pairs: Vec<&str> = (0..s.len())
@@ -647,6 +788,7 @@ mod ipc_rw {
 // ── episodes_list ─────────────────────────────────────────────────────────────
 
 async fn episodes_list(show_id: &str, mode: &str) -> Result<Vec<String>> {
+    crate::debug_log!("episodes_list: show_id={show_id}, mode={mode}");
     let gql = r#"query ($showId: String!) { show( _id: $showId ) { _id availableEpisodesDetail }}"#;
     let vars = format!(r#"{{"showId":"{}"}}"#, show_id);
 
@@ -661,15 +803,22 @@ async fn episodes_list(show_id: &str, mode: &str) -> Result<Vec<String>> {
     .await
     .map_err(|e| anyhow!("Episode-list request failed: {e}"))?;
 
+    crate::debug_log!("episodes_list response: {} bytes", text.len());
+    
     let json: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
+        crate::debug_log!("episodes_list JSON parse error: {e}");
         anyhow!("Episode-list parse error: {e}. Upstream likely returned non-JSON.")
     })?;
+    crate::debug_log!("episodes_list parsed JSON successfully");
     let mut eps: Vec<String> =
         if let Some(arr) = json["data"]["show"]["availableEpisodesDetail"][mode].as_array() {
+            let count = arr.len();
+            crate::debug_log!("episodes_list found {count} episodes for mode {mode}");
             arr.iter()
                 .filter_map(|v| v.as_str().map(String::from))
                 .collect()
         } else {
+            crate::debug_log!("episodes_list: no episodes found for mode {mode}");
             vec![]
         };
 
@@ -689,38 +838,93 @@ async fn get_episode_url(
     mode: &str,
     quality: &str,
 ) -> Result<(String, Option<String>)> {
+    crate::debug_log!("get_episode_url: id={id}, ep={ep}, mode={mode}");
     let gql = r#"query ($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) { episode( showId: $showId translationType: $translationType episodeString: $episodeString ) { episodeString sourceUrls }}"#;
     let vars = format!(
         r#"{{"showId":"{}","translationType":"{}","episodeString":"{}"}}"#,
         id, mode, ep
     );
 
-    // Use browser_auth which handles FlareSolverr -> visible browser fallback chain
-    let text = crate::browser_auth::fetch_text_with_query(
-        ALLANIME_API,
-        &[
-            ("variables".to_string(), vars),
-            ("query".to_string(), gql.to_string()),
-        ],
-    )
-    .await
-    .map_err(|e| anyhow!("Episode-source request failed: {e}"))?;
+    // Try POST with JSON body first (Cloudflare allows POST, blocks GET with query params)
+    let body = format!(r#"{{"query":"{}","variables":{}}}"#, gql.replace('"', "\\\""), vars);
+    crate::debug_log!("POST body: {body}");
+    
+    let text = match crate::browser_auth::fetch_post_json(ALLANIME_API, &body).await {
+        Ok(t) => t,
+        Err(e) => {
+            crate::debug_log!("POST failed, falling back to GET: {e}");
+            crate::browser_auth::fetch_text_with_query(
+                ALLANIME_API,
+                &[
+                    ("variables".to_string(), vars),
+                    ("query".to_string(), gql.to_string()),
+                ],
+            )
+            .await
+            .map_err(|e| anyhow!("Episode-source request failed: {e}"))?
+        }
+    };
 
+    crate::debug_log!("get_episode_url response: {} bytes", text.len());
+    crate::debug_log!("Response preview: {}", &text[..500.min(text.len())]);
+    
     let mut providers: Vec<(String, String)> = Vec::new();
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-        if let Some(arr) = json["data"]["episode"]["sourceUrls"].as_array() {
-            for entry in arr {
+        crate::debug_log!("JSON parsed successfully");
+        
+        // Check for new API format with tobeparsed
+        if let Some(tobeparsed) = json["data"]["tobeparsed"].as_str() {
+            crate::debug_log!("Found tobeparsed field, deciphering...");
+            if let Some(deciphered) = decipher_tobeparsed(tobeparsed) {
+                crate::debug_log!("Deciphered data: {:?}", deciphered);
+                // The deciphered data structure is: {"episode": {"episodeString": "1", "sourceUrls": [...]}}
+                // Extract sourceUrls from the nested episode object
+                let source_urls = deciphered["episode"]["sourceUrls"].as_array()
+                    .or_else(|| deciphered.as_array()) // Fallback: handle if it's a raw array (old format)
+                    .or_else(|| deciphered["sourceUrls"].as_array()); // Fallback: direct sourceUrls field
+
+                if let Some(source_urls) = source_urls {
+                    crate::debug_log!("sourceUrls array found with {} entries", source_urls.len());
+                    for (i, entry) in source_urls.iter().enumerate() {
+                        let Some(name) = entry["sourceName"].as_str() else {
+                            crate::debug_log!("Entry {} missing sourceName", i);
+                            continue;
+                        };
+                        let Some(raw_url) = entry["sourceUrl"].as_str() else {
+                            crate::debug_log!("Entry {} missing sourceUrl", i);
+                            continue;
+                        };
+                        crate::debug_log!("Entry {}: name={}, url starts with --: {}", i, name, raw_url.starts_with("--"));
+                        if let Some(encoded) = raw_url.strip_prefix("--") {
+                            providers.push((name.to_string(), encoded.to_string()));
+                        }
+                    }
+                } else {
+                    crate::debug_log!("No sourceUrls array found in deciphered data. Keys: {:?}", deciphered.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+                }
+            }
+        } else if let Some(arr) = json["data"]["episode"]["sourceUrls"].as_array() {
+            // Old API format
+            crate::debug_log!("sourceUrls array found with {} entries", arr.len());
+            for (i, entry) in arr.iter().enumerate() {
                 let Some(name) = entry["sourceName"].as_str() else {
+                    crate::debug_log!("Entry {} missing sourceName", i);
                     continue;
                 };
                 let Some(raw_url) = entry["sourceUrl"].as_str() else {
+                    crate::debug_log!("Entry {} missing sourceUrl", i);
                     continue;
                 };
+                crate::debug_log!("Entry {}: name={}, url starts with --: {}", i, name, raw_url.starts_with("--"));
                 if let Some(encoded) = raw_url.strip_prefix("--") {
                     providers.push((name.to_string(), encoded.to_string()));
                 }
             }
+        } else {
+            crate::debug_log!("Neither tobeparsed nor sourceUrls found");
         }
+    } else {
+        crate::debug_log!("JSON parse failed");
     }
 
     if providers.is_empty() {
@@ -740,8 +944,10 @@ async fn get_episode_url(
     }
 
     if providers.is_empty() {
+        crate::debug_log!("get_episode_url: no providers found for ep {ep}");
         bail!("No providers found for episode {ep}. Check show ID and mode ({mode}).");
     }
+    crate::debug_log!("get_episode_url: found {} providers", providers.len());
 
     let mut all_links: Vec<(String, String, Option<String>)> = Vec::new();
     let client = client();
@@ -757,11 +963,18 @@ async fn get_episode_url(
     }
 
     while let Some(res) = set.join_next().await {
-        if let Ok(Ok(links)) = res {
-            if !links.is_empty() {
-                all_links.extend(links);
-                break;
+        match res {
+            Ok(Ok(links)) => {
+                crate::debug_log!("get_links task returned {} links", links.len());
+                if !links.is_empty() {
+                    all_links.extend(links);
+                    break;
+                }
             }
+            Ok(Err(e)) => {
+                crate::debug_log!("get_links task failed: {e}");
+            }
+            Err(_) => {}
         }
     }
 
@@ -802,16 +1015,25 @@ async fn get_links(
     _client: &reqwest::Client,
     path: &str,
 ) -> Result<Vec<(String, String, Option<String>)>> {
+    crate::debug_log!("get_links: path={path}");
     let url = if path.starts_with("http") {
         path.to_string()
     } else {
         format!("https://{ALLANIME_BASE}{path}")
     };
+    crate::debug_log!("get_links: full_url={url}");
 
     // Use browser_auth which handles FlareSolverr -> visible browser fallback chain
-    let response = crate::browser_auth::fetch_text_from_url(&url)
-        .await
-        .map_err(|e| anyhow!("Provider request failed for {url}: {e}"))?;
+    let response = match crate::browser_auth::fetch_text_from_url(&url).await {
+        Ok(r) => {
+            crate::debug_log!("get_links: fetched {} bytes from {url}", r.len());
+            r
+        }
+        Err(e) => {
+            crate::debug_log!("get_links: failed to fetch {url}: {e}");
+            return Err(anyhow!("Provider request failed for {url}: {e}"));
+        }
+    };
     let separated = response.replace("},{", "\n");
 
     let mut links: Vec<(String, String, Option<String>)> = Vec::new();
